@@ -173,7 +173,7 @@ fn run_chain<M>(
 where
     M: SseModel + Send + Sync + 'static,
 {
-    let seed = derive_seed(config.master_seed, chain_index as u64);
+    let seed = derive_chain_seed(config.master_seed, chain_index as u64);
     let state = SSEState::new(
         model.as_ref(),
         initial_basis_state.to_vec(),
@@ -232,7 +232,13 @@ fn combine_energy(chains: &[ChainResults]) -> CombinedEnergyResults {
     }
 }
 
-fn derive_seed(master_seed: u64, chain_index: u64) -> u64 {
+/// Derives a deterministic, statistically separated seed for one chain.
+///
+/// The mapping is independent of worker count and scheduling. It is part of
+/// the crate's reproducibility contract and must remain stable within a schema
+/// version.
+#[must_use]
+pub fn derive_chain_seed(master_seed: u64, chain_index: u64) -> u64 {
     let mut value = master_seed ^ chain_index.wrapping_mul(0x9e37_79b9_7f4a_7c15);
     value = (value ^ (value >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
     value = (value ^ (value >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);

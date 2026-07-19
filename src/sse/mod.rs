@@ -19,12 +19,12 @@ mod state;
 pub use local_model::LocalSseModel;
 pub use measurements::{ThermodynamicAccumulator, ThermodynamicResults};
 pub use parallel::{
-    run_parallel_tfim, ChainResults, CombinedEnergyResults, ParallelSimulationConfig,
-    ParallelSimulationError, ParallelSimulationResults,
+    derive_chain_seed, run_parallel_tfim, ChainResults, CombinedEnergyResults,
+    ParallelSimulationConfig, ParallelSimulationError, ParallelSimulationResults,
 };
 pub use sampler::{
-    ClusterSweepStats, DiagonalSweepStats, RunTiming, SamplerError, SimulationConfig,
-    SimulationResults, SseSampler,
+    ClusterSweepStats, DiagonalSweepStats, MeasurementRecord, RecordedSimulationResults, RunTiming,
+    SamplerError, SimulationConfig, SimulationResults, SseSampler,
 };
 pub use state::{Operator, PropagationResult, SSEState};
 

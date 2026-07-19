@@ -121,6 +121,27 @@ pub struct SimulationResults {
     pub timing: RunTiming,
 }
 
+/// One recorded expansion-order sample from a chain.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MeasurementRecord {
+    /// Zero-based position in the measurement series.
+    pub measurement_index: usize,
+    /// Number of non-identity operators at this measurement.
+    pub expansion_order: usize,
+}
+
+/// Aggregate results together with the underlying expansion-order series.
+///
+/// Recording is optional because library callers interested only in aggregate
+/// thermodynamics should not pay the memory cost of retaining every sample.
+#[derive(Debug)]
+pub struct RecordedSimulationResults {
+    /// Aggregate thermodynamics, update statistics, and timing.
+    pub simulation: SimulationResults,
+    /// Expansion-order measurements in sampling order.
+    pub measurements: Vec<MeasurementRecord>,
+}
+
 /// Wall-clock and work-count breakdown for a simulation run.
 ///
 /// Update durations include both thermalization and measurement phases. The
@@ -645,6 +666,27 @@ impl<M: SseModel, R: Rng> SseSampler<M, R> {
         &mut self,
         config: SimulationConfig,
     ) -> Result<SimulationResults, SamplerError> {
+        self.run_tfim_inner(config, false)
+            .map(|recorded| recorded.simulation)
+    }
+
+    /// Runs TFIM sampling and retains the complete expansion-order series.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same failures as [`SseSampler::run_tfim`].
+    pub fn run_tfim_recorded(
+        &mut self,
+        config: SimulationConfig,
+    ) -> Result<RecordedSimulationResults, SamplerError> {
+        self.run_tfim_inner(config, true)
+    }
+
+    fn run_tfim_inner(
+        &mut self,
+        config: SimulationConfig,
+        retain_measurements: bool,
+    ) -> Result<RecordedSimulationResults, SamplerError> {
         if config.measurement_sweeps == 0 {
             return Err(SamplerError::InvalidSimulationConfig(
                 "measurement_sweeps must be greater than zero",
@@ -671,6 +713,8 @@ impl<M: SseModel, R: Rng> SseSampler<M, R> {
         timing.thermalization = thermalization_started.elapsed();
 
         let mut accumulator = ThermodynamicAccumulator::default();
+        let mut measurements =
+            retain_measurements.then(|| Vec::with_capacity(config.measurement_sweeps));
         let mut diagonal_total = DiagonalSweepStats::default();
         let mut cluster_total = ClusterSweepStats::default();
         let measurement_started = Instant::now();
@@ -688,6 +732,12 @@ impl<M: SseModel, R: Rng> SseSampler<M, R> {
             }
             let started = Instant::now();
             accumulator.record(self.state.expansion_order());
+            if let Some(records) = &mut measurements {
+                records.push(MeasurementRecord {
+                    measurement_index: records.len(),
+                    expansion_order: self.state.expansion_order(),
+                });
+            }
             timing.accumulation += started.elapsed();
             timing.measurements += 1;
         }
@@ -697,11 +747,14 @@ impl<M: SseModel, R: Rng> SseSampler<M, R> {
             .results(self.beta, self.model.energy_shift(), self.model.num_sites())
             .expect("measurement_sweeps was validated as nonzero");
         timing.total = run_started.elapsed();
-        Ok(SimulationResults {
-            thermodynamics,
-            diagonal: diagonal_total,
-            clusters: cluster_total,
-            timing,
+        Ok(RecordedSimulationResults {
+            simulation: SimulationResults {
+                thermodynamics,
+                diagonal: diagonal_total,
+                clusters: cluster_total,
+                timing,
+            },
+            measurements: measurements.unwrap_or_default(),
         })
     }
 
@@ -714,7 +767,20 @@ impl<M: SseModel, R: Rng> SseSampler<M, R> {
         &mut self,
         config: SimulationConfig,
     ) -> Result<SimulationResults, SamplerError> {
-        self.run_with_rydberg_update(config, false)
+        self.run_with_rydberg_update(config, false, false)
+            .map(|recorded| recorded.simulation)
+    }
+
+    /// Runs local Rydberg sampling and retains the expansion-order series.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same failures as [`SseSampler::run_rydberg`].
+    pub fn run_rydberg_recorded(
+        &mut self,
+        config: SimulationConfig,
+    ) -> Result<RecordedSimulationResults, SamplerError> {
+        self.run_with_rydberg_update(config, false, true)
     }
 
     /// Runs a Rydberg simulation using the global corrected reference update.
@@ -728,14 +794,29 @@ impl<M: SseModel, R: Rng> SseSampler<M, R> {
         &mut self,
         config: SimulationConfig,
     ) -> Result<SimulationResults, SamplerError> {
-        self.run_with_rydberg_update(config, true)
+        self.run_with_rydberg_update(config, true, false)
+            .map(|recorded| recorded.simulation)
+    }
+
+    /// Runs the global Rydberg reference update and retains its sample series.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same failures as
+    /// [`SseSampler::run_rydberg_global_reference`].
+    pub fn run_rydberg_global_reference_recorded(
+        &mut self,
+        config: SimulationConfig,
+    ) -> Result<RecordedSimulationResults, SamplerError> {
+        self.run_with_rydberg_update(config, true, true)
     }
 
     fn run_with_rydberg_update(
         &mut self,
         config: SimulationConfig,
         global_reference: bool,
-    ) -> Result<SimulationResults, SamplerError> {
+        retain_measurements: bool,
+    ) -> Result<RecordedSimulationResults, SamplerError> {
         if config.measurement_sweeps == 0 {
             return Err(SamplerError::InvalidSimulationConfig(
                 "measurement_sweeps must be greater than zero",
@@ -766,6 +847,8 @@ impl<M: SseModel, R: Rng> SseSampler<M, R> {
         timing.thermalization = thermalization_started.elapsed();
 
         let mut accumulator = ThermodynamicAccumulator::default();
+        let mut measurements =
+            retain_measurements.then(|| Vec::with_capacity(config.measurement_sweeps));
         let mut diagonal_total = DiagonalSweepStats::default();
         let mut cluster_total = ClusterSweepStats::default();
         let measurement_started = Instant::now();
@@ -787,6 +870,12 @@ impl<M: SseModel, R: Rng> SseSampler<M, R> {
             }
             let started = Instant::now();
             accumulator.record(self.state.expansion_order());
+            if let Some(records) = &mut measurements {
+                records.push(MeasurementRecord {
+                    measurement_index: records.len(),
+                    expansion_order: self.state.expansion_order(),
+                });
+            }
             timing.accumulation += started.elapsed();
             timing.measurements += 1;
         }
@@ -795,11 +884,14 @@ impl<M: SseModel, R: Rng> SseSampler<M, R> {
             .results(self.beta, self.model.energy_shift(), self.model.num_sites())
             .expect("measurement_sweeps was validated as nonzero");
         timing.total = run_started.elapsed();
-        Ok(SimulationResults {
-            thermodynamics,
-            diagonal: diagonal_total,
-            clusters: cluster_total,
-            timing,
+        Ok(RecordedSimulationResults {
+            simulation: SimulationResults {
+                thermodynamics,
+                diagonal: diagonal_total,
+                clusters: cluster_total,
+                timing,
+            },
+            measurements: measurements.unwrap_or_default(),
         })
     }
 }

@@ -40,22 +40,36 @@
 
 #![warn(missing_docs)]
 
+mod artifacts;
+mod config;
 mod core;
 mod geometry;
 mod hamiltonian;
 mod lattice;
+mod runner;
 mod sse;
 
+pub use artifacts::{
+    inspect_run, ArtifactError, ChainArtifact, ChainDiagnostics, ChainSummary, CheckpointIndex,
+    RunInspection, RunManifest, RunStatus, RunSummary, ThermodynamicArtifact, TimingArtifact,
+    UpdateStatistics, ARTIFACT_SCHEMA_VERSION,
+};
+pub use config::{
+    BoundaryConfig, ConfigError, ExecutionSettings, GeometryConfig, InitialState, ModelConfig,
+    RunConfig, RydbergUpdate, SimulationSettings, RUN_SCHEMA_VERSION,
+};
 pub use core::{OperatorKind, Spin};
 pub use geometry::{BoundaryCondition, Geometry, GeometryError};
 pub use hamiltonian::{
     Hamiltonian, HamiltonianError, HamiltonianTerm, LocalOperatorKind, TermSupport,
 };
 pub use lattice::{Bond, Lattice, LatticeError, PairSelection};
+pub use runner::{run_to_directory, RunMode, RunOutcome, RunnerError};
 pub use sse::{
-    run_parallel_tfim, ChainResults, ClusterSweepStats, CombinedEnergyResults, DiagonalSweepStats,
-    LocalSseModel, Operator, ParallelSimulationConfig, ParallelSimulationError,
-    ParallelSimulationResults, PropagationResult, RunTiming, SSEState, SamplerError,
-    SimulationConfig, SimulationResults, SseModel, SseModelError, SseSampler, SseTerm,
-    SseTermSites, ThermodynamicAccumulator, ThermodynamicResults,
+    derive_chain_seed, run_parallel_tfim, ChainResults, ClusterSweepStats, CombinedEnergyResults,
+    DiagonalSweepStats, LocalSseModel, MeasurementRecord, Operator, ParallelSimulationConfig,
+    ParallelSimulationError, ParallelSimulationResults, PropagationResult,
+    RecordedSimulationResults, RunTiming, SSEState, SamplerError, SimulationConfig,
+    SimulationResults, SseModel, SseModelError, SseSampler, SseTerm, SseTermSites,
+    ThermodynamicAccumulator, ThermodynamicResults,
 };

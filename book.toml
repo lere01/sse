@@ -1,0 +1,16 @@
+[book]
+authors = ["SSE contributors"]
+language = "en"
+src = "docs"
+title = "SSE User Guide"
+
+[build]
+build-dir = "target/book"
+
+[output.html]
+mathjax-support = true
+site-url = "/sse/"
+git-repository-url = "https://github.com/lere01/sse"
+edit-url-template = "https://github.com/lere01/sse/edit/main/docs/{path}"
+default-theme = "light"
+preferred-dark-theme = "navy"

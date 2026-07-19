@@ -1,0 +1,17 @@
+# Summary
+
+- [SSE](introduction.md)
+- [Getting started](getting-started.md)
+- [Physical conventions](physical-conventions.md)
+- [The SSE method](sse-method.md)
+- [Models](models/index.md)
+  - [Transverse-field Ising model](models/tfim.md)
+  - [Rydberg model](models/rydberg.md)
+- [Running simulations](simulation/index.md)
+  - [Convergence](simulation/convergence.md)
+  - [Uncertainty and autocorrelation](simulation/uncertainty.md)
+  - [Reproducibility](simulation/reproducibility.md)
+- [Current command-line examples](current-interface.md)
+- [Validation](validation.md)
+- [Known limitations](limitations.md)
+- [Rust API reference](api.md)

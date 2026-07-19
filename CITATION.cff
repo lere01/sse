@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use sse in published work, please cite the software and archive the exact release used."
+title: "sse: stochastic series expansion quantum Monte Carlo for lattice models"
+type: software
+authors:
+  - family-names: Oyedemi
+    given-names: Faith
+repository-code: "https://github.com/lere01/sse"
+url: "https://lere01.github.io/sse/"
+license: Apache-2.0
+version: 0.1.0
+date-released: 2026-07-19
+keywords:
+  - quantum Monte Carlo
+  - stochastic series expansion
+  - transverse-field Ising model
+  - Rydberg atoms

@@ -20,7 +20,7 @@ The implemented Hamiltonian is
 
 $$
 \begin{equation}
-H = -J sum_<ij> sigma_z(i) sigma_z(j) - h sum_i sigma_x(i),
+H = -J \sum_{<ij>} \sigma^z_i \sigma^z_j - h \sum_i \sigma^x_i,
 \end{equation}
 $$
 
@@ -35,9 +35,7 @@ The implemented Hamiltonian is
 
 $$
 \begin{equation}
-H = -(omega / 2) sum_i sigma_x(i)
-    - detuning sum_i n(i)
-    + sum_(i<j) [c6 / r(i,j)^6] n(i) n(j).
+H = -\frac{omega}{2} \sum_i \sigma^x_i - detuning \sum_i n_i + \sum_{i<j} \frac{C^6}{r(i,j)}^6 n_i n_j.
 \end{equation}
 $$
 
@@ -75,7 +73,7 @@ The local decomposition represents the Hamiltonian as
 
 $$
 \begin{equation}
-H = energy_shift - sum_a B_a,
+H = energy_{shift} - \sum_a B_a,
 \end{equation}
 $$
 
@@ -85,15 +83,15 @@ energy estimator is
 
 $$
 \begin{equation}
-E = energy_shift - n / beta.
+E = energy_{shift} - n / beta.
 \end{equation}
 $$
 
-The heat-capacity estimator, in units with `k_B = 1`, is
+The heat-capacity estimator, in units with $k_B = 1$, is
 
 $$
 \begin{equation}
-C = <n^2> - <n>^2 - <n>.
+C = \langle n^2 \rangle - \langle n \rangle^2 - \langle n \rangle.
 \end{equation}
 $$
 

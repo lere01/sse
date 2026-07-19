@@ -18,9 +18,11 @@ not part of this release.
 
 The implemented Hamiltonian is
 
-```text
+$$
+\begin{equation}
 H = -J sum_<ij> sigma_z(i) sigma_z(j) - h sum_i sigma_x(i),
-```
+\end{equation}
+$$
 
 where nearest-neighbour pairs are supplied explicitly or generated from a
 geometry. The built-in SSE decomposition requires `J >= 0` and `h >= 0` and
@@ -31,11 +33,13 @@ insertion and removal updates with a linked-cluster update.
 
 The implemented Hamiltonian is
 
-```text
+$$
+\begin{equation}
 H = -(omega / 2) sum_i sigma_x(i)
     - detuning sum_i n(i)
     + sum_(i<j) [c6 / r(i,j)^6] n(i) n(j).
-```
+\end{equation}
+$$
 
 The occupation convention is
 
@@ -69,23 +73,29 @@ site = x + lx * y.
 
 The local decomposition represents the Hamiltonian as
 
-```text
+$$
+\begin{equation}
 H = energy_shift - sum_a B_a,
-```
+\end{equation}
+$$
 
 with non-negative sampled matrix elements of the local operators `B_a`. If `n`
 is the number of non-identity operators in the SSE string, the instantaneous
 energy estimator is
 
-```text
+$$
+\begin{equation}
 E = energy_shift - n / beta.
-```
+\end{equation}
+$$
 
 The heat-capacity estimator, in units with `k_B = 1`, is
 
-```text
+$$
+\begin{equation}
 C = <n^2> - <n>^2 - <n>.
-```
+\end{equation}
+$$
 
 Independent-chain execution reports uncertainty from the variation of chain
 means. The Rydberg scaling example also demonstrates an integrated

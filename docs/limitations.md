@@ -2,10 +2,10 @@
 
 Version 0.1.0 has the following explicit limitations:
 
-- The stable user interface is a Rust API plus Cargo examples, not a
-  configuration-driven standalone CLI.
-- Result manifests and versioned JSON, CSV, or Parquet schemas are not yet
-  implemented.
+- The `sse-run-v1` schema currently accepts YAML only.
+- Measurement output is CSV and JSON; a columnar format is not yet available.
+- Restart granularity is one completed independent chain. An interrupted active
+  chain restarts deterministically rather than resuming mid-chain.
 - Built-in sampleable models are limited to ferromagnetic TFIM and Rydberg
   Hamiltonians in the documented sign conventions.
 - Custom coordinates do not support periodic simulation cells.

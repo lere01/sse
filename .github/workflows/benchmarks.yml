@@ -1,0 +1,50 @@
+name: Benchmarks
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  SSE_GIT_REVISION: ${{ github.sha }}
+
+jobs:
+  representative-scales:
+    name: Representative TFIM and Rydberg scales
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install stable Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Cache Cargo artifacts
+        uses: swatinem/rust-cache@v2
+
+      - name: Create report directory
+        run: mkdir -p target/benchmark-reports
+
+      - name: Run periodic 4x4 TFIM benchmark
+        run: >-
+          cargo run --release --locked --example tfim_benchmark --
+          4 2.0 4.0 2000 24301 4 4
+          | tee target/benchmark-reports/tfim-4x4.txt
+
+      - name: Run open 3x3 Rydberg benchmark
+        run: >-
+          cargo run --release --locked --example rydberg_scaling --
+          3 1.0 2.0 1.0 4.0 1000 5000 local 24301
+          | tee target/benchmark-reports/rydberg-3x3.txt
+
+      - name: Upload benchmark reports
+        uses: actions/upload-artifact@v7
+        with:
+          name: benchmark-reports-${{ github.sha }}
+          path: target/benchmark-reports
+          if-no-files-found: error

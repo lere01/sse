@@ -15,6 +15,9 @@ All notable changes to this project are documented here. The project follows
   diagnostics
 - Physics-first mdBook guide and GitHub Pages deployment
 - Tagged release workflow for Linux, macOS, and Windows binaries
+- Manually triggered representative-scale benchmark workflow
+- Publishable `quantum-sse` package identity while preserving the `sse` binary
+  and Rust library names
 
 ## 0.1.0 - 2026-07-19
 

@@ -2,15 +2,20 @@
 
 [User guide](https://lere01.github.io/sse/) |
 [Rust API](https://lere01.github.io/sse/api/sse/) |
-[Source](https://github.com/lere01/sse)
+[Source](https://github.com/lere01/sse) |
+[Releases](https://github.com/lere01/sse/releases)
 
 `sse` is a Rust implementation of finite-temperature stochastic series
 expansion quantum Monte Carlo for spin and Rydberg lattice models.
 
-The current release is **version 0.1.0**. It provides a tested Rust library and
-command-line examples for transverse-field Ising and Rydberg simulations. A
-configuration-driven, physicist-facing command-line interface is planned but is
-not part of this release.
+The crates.io package is named `quantum-sse` because the unrelated `sse`
+package name was already allocated. The installed command and Rust library
+import remain `sse`.
+
+The current source version is **0.1.0**. It provides a tested Rust library and a
+configuration-driven command-line interface for transverse-field Ising and
+Rydberg simulations. Runs preserve raw measurements, provenance, statistical
+diagnostics, and independently resumable chain artifacts.
 
 ## Supported physics
 
@@ -139,8 +144,37 @@ combines that guide with the Rust API under `/api/sse/`.
 
 ## Quick start
 
-The current release exposes simulations through examples. Positional arguments
-are optional and fall back to defaults.
+Validate an included physics configuration, execute it, and inspect its durable
+result directory:
+
+```bash
+cargo run --release -- validate --config configs/tfim-chain.yaml
+cargo run --release -- run \
+  --config configs/tfim-chain.yaml \
+  --output results/tfim-chain
+cargo run --release -- inspect results/tfim-chain
+```
+
+The strict `sse-run-v1` YAML schema rejects unknown fields and validates the
+geometry, Hamiltonian, SSE decomposition, and execution settings before
+sampling. See the [configuration reference](https://lere01.github.io/sse/configuration.html)
+and [artifact contract](https://lere01.github.io/sse/artifacts.html).
+
+An interrupted run can reuse completed independent chains:
+
+```bash
+cargo run --release -- run \
+  --config configs/tfim-chain.yaml \
+  --output results/tfim-chain \
+  --resume
+```
+
+Fresh runs refuse existing paths. Intentional replacement requires `--force`.
+
+## Benchmark examples
+
+The Cargo examples remain useful for focused scaling and exact-reference work.
+Their positional arguments are optional and fall back to defaults.
 
 ### Parallel TFIM simulation
 
@@ -228,7 +262,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 Parallel chains derive deterministic seeds from a master seed and chain index.
 Changing the number of Rayon worker threads does not change the individual
-chain trajectories. Record at least the following for a reproducible study:
+chain trajectories within a software version. The CLI records the following in
+its resolved configuration, manifest, summary, and chain artifacts:
 
 - Software version or Git revision
 - Complete Hamiltonian and geometry parameters
@@ -241,8 +276,9 @@ chain trajectories. Record at least the following for a reproducible study:
 
 ## Current limitations
 
-- There is not yet a stable configuration-file CLI.
-- Measurement-series and result-artifact schemas are not yet implemented.
+- The `sse-run-v1` configuration format is YAML only.
+- Measurement output is JSON and CSV rather than a columnar format.
+- Restart granularity is one completed independent chain.
 - Built-in physical models are currently limited to TFIM and Rydberg systems.
 - Custom periodic simulation cells are not supported.
 - The TFIM local decomposition currently accepts only non-negative `J` and `h`.
@@ -255,9 +291,9 @@ chain trajectories. Record at least the following for a reproducible study:
 The physics-first guide and automated GitHub Pages build are maintained in this
 repository. Planned product work includes:
 
-- A versioned YAML configuration schema
-- `run`, `validate`, and `inspect` CLI commands
-- Versioned JSON and CSV result artifacts
+- Additional physical observables and model families
+- A columnar measurement artifact for very large campaigns
+- Mid-chain checkpointing where its storage cost is justified
 - Prebuilt command-line releases that do not require a Rust installation
 
 ## License

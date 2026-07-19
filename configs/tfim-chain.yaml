@@ -1,0 +1,21 @@
+schema_version: sse-run-v1
+name: four-site periodic TFIM
+model:
+  kind: tfim
+  geometry:
+    kind: chain
+    length: 4
+    boundary: periodic
+  j: 1.0
+  h: 0.5
+simulation:
+  beta: 4.0
+  operator_string_length: 128
+  thermalization_sweeps: 1000
+  measurement_sweeps: 10000
+  sweeps_per_measurement: 1
+execution:
+  chains: 4
+  threads: 4
+  seed: 24301
+initial_state: alternating

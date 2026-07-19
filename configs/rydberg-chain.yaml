@@ -1,0 +1,23 @@
+schema_version: sse-run-v1
+name: four-site open Rydberg chain
+model:
+  kind: rydberg
+  geometry:
+    kind: chain
+    length: 4
+    boundary: open
+  omega: 1.0
+  detuning: 2.0
+  c6: 1.0
+  update: local
+simulation:
+  beta: 4.0
+  operator_string_length: 128
+  thermalization_sweeps: 1000
+  measurement_sweeps: 10000
+  sweeps_per_measurement: 1
+execution:
+  chains: 4
+  threads: 4
+  seed: 24301
+initial_state: down

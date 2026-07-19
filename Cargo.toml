@@ -2,12 +2,15 @@
 name = "sse"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.80"
 license = "Apache-2.0"
 description = "Finite-temperature stochastic series expansion quantum Monte Carlo for lattice models"
 repository = "https://github.com/lere01/sse.git"
 homepage = "https://lere01.github.io/sse/"
 documentation = "https://lere01.github.io/sse/api/sse/"
 readme = "README.md"
+keywords = ["quantum-monte-carlo", "physics", "lattice", "spin", "rydberg"]
+categories = ["science", "simulation"]
 
 [dependencies]
 rand = "0.9.2"

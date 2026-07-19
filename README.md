@@ -20,7 +20,7 @@ The implemented Hamiltonian is
 
 $$
 \begin{equation}
-H = -J \sum_{<ij>} \sigma^z_i \sigma^z_j - h \sum_i \sigma^x_i,
+H = -J \sum_{\langle i,j \rangle} \sigma^z_i \sigma^z_j - h \sum_i \sigma^x_i,
 \end{equation}
 $$
 
@@ -35,7 +35,9 @@ The implemented Hamiltonian is
 
 $$
 \begin{equation}
-H = -\frac{omega}{2} \sum_i \sigma^x_i - detuning \sum_i n_i + \sum_{i<j} \frac{C^6}{r(i,j)^6} n_i n_j.
+H = -\frac{\Omega}{2} \sum_i \sigma^x_i
+    - \Delta \sum_i n_i
+    + \sum_{i<j} \frac{C_6}{r_{ij}^6} n_i n_j.
 \end{equation}
 $$
 
@@ -73,7 +75,7 @@ The local decomposition represents the Hamiltonian as
 
 $$
 \begin{equation}
-H = energy_{shift} - \sum_a B_a,
+H = E_{\mathrm{shift}} - \sum_a B_a,
 \end{equation}
 $$
 
@@ -83,7 +85,7 @@ energy estimator is
 
 $$
 \begin{equation}
-E = energy_{shift} - n / beta.
+E = E_{\mathrm{shift}} - \frac{n}{\beta}.
 \end{equation}
 $$
 
@@ -103,7 +105,7 @@ with respect to inverse temperature.
 
 ## Requirements
 
-- A recent stable Rust toolchain
+- Rust 1.80 or newer
 - Cargo
 
 Install Rust through [rustup](https://rustup.rs/) if it is not already
@@ -124,6 +126,16 @@ Generate the Rust API documentation with:
 ```bash
 cargo doc --no-deps --open
 ```
+
+Build the complete physics-first guide locally with
+[mdBook](https://rust-lang.github.io/mdBook/):
+
+```bash
+mdbook build
+```
+
+The generated guide is written to `target/book`. The public documentation site
+combines that guide with the Rust API under `/api/sse/`.
 
 ## Quick start
 
@@ -238,15 +250,14 @@ chain trajectories. Record at least the following for a reproducible study:
 - Users must assess equilibration, autocorrelation, and finite-size convergence
   for their physical regime.
 
-## Documentation roadmap
+## Roadmap
 
-Planned work includes:
+The physics-first guide and automated GitHub Pages build are maintained in this
+repository. Planned product work includes:
 
-- A physics-first user guide with detailed conventions and convergence advice
 - A versioned YAML configuration schema
 - `run`, `validate`, and `inspect` CLI commands
 - Versioned JSON and CSV result artifacts
-- GitHub Pages documentation with Rust API reference under `/api`
 - Prebuilt command-line releases that do not require a Rust installation
 
 ## License

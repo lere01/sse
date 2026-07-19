@@ -1,45 +1,62 @@
-# Current command-line examples
+# Command-line interface
 
-Version 0.1.0 does not yet provide the planned configuration-driven `sse run`
-interface. Its executable simulations are Cargo examples.
+The `sse` binary provides three stable workflow commands.
 
-## TFIM benchmark
+## Validate
 
-```text
-cargo run --release --example tfim_benchmark --
-    [linear_size] [h_over_j] [beta] [measurement_sweeps]
-    [seed] [chains] [threads]
+Validate YAML, schema fields, geometry, Hamiltonian coefficients, the local SSE
+decomposition, and execution settings without starting sampling:
+
+```bash
+sse validate --config configs/tfim-chain.yaml
 ```
 
-This example uses a periodic square lattice and \(J=1\). It performs fixed
-thermalization in every chain, distributes measurements across chains, and
-combines their energy-density means.
+Use `--print-resolved` to emit the canonical configuration.
 
-## Rydberg scaling
+## Run
 
-```text
-cargo run --release --example rydberg_scaling --
-    [size] [omega] [detuning] [c6] [beta] [thermalization]
-    [measurements] [local|global] [seed]
+Execute independent chains and write durable artifacts:
+
+```bash
+sse run \
+  --config configs/tfim-chain.yaml \
+  --output results/tfim-chain
 ```
 
-This example uses an open square lattice and records every measurement-phase
-energy estimate in memory to calculate a simple autocorrelation diagnostic.
+A fresh run refuses an existing output path. Use `--resume` to reuse completed
+chains from an interrupted run with an identical resolved configuration. Use
+`--force` only when intentionally replacing an existing run directory.
 
-## Exact Rydberg benchmark
+The terminal prints the energy density and between-chain standard error. The
+JSON and CSV artifacts are the authoritative machine-readable output.
 
-```text
-cargo run --release --example rydberg_benchmark --
-    [linear_size] [omega] [detuning] [c6] [beta]
-    [measurement_sweeps] [chains] [seed] [local|global]
+## Inspect
+
+Read status and summary data without modifying a run:
+
+```bash
+sse inspect results/tfim-chain
+sse inspect results/tfim-chain --json
 ```
 
-The example compares the SSE thermal energy with dense exact diagonalization
-and fails if their difference exceeds three estimated between-chain standard
-errors. Dense validation is limited to six sites.
+`inspect` works for running, failed, and completed manifests. Aggregate results
+are present after all chains finish.
 
-## Planned interface
+## Exit behavior
 
-A future release will add versioned YAML configuration together with `run`,
-`validate`, and `inspect` commands. Until it is implemented and released, do
-not rely on those command names in automated workflows.
+Successful commands return zero. Configuration, simulation, and artifact errors
+return one. Command-line syntax errors are reported by the argument parser and
+return two. Diagnostics are sent to standard error; requested structured output
+is sent to standard output.
+
+## Cargo invocation
+
+Before installing a release binary, invoke the same interface through Cargo:
+
+```bash
+cargo run --release -- validate --config configs/tfim-chain.yaml
+cargo run --release -- run --config configs/tfim-chain.yaml --output results/tfim
+```
+
+The benchmark examples remain available for focused performance and exact-
+reference work, but new automated workflows should use the versioned CLI.

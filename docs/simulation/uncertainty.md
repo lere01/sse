@@ -17,16 +17,21 @@ An approximate effective sample count is
 N_{\mathrm{eff}}\approx\frac{N}{2\tau_{\mathrm{int}}}.
 \]
 
-The Rydberg scaling example truncates the correlation sum at the first
-non-positive or non-finite estimate, with a maximum lag of 1,000. This is a
-diagnostic estimator, not a universal optimal-window procedure.
+Configured runs truncate the correlation sum at the first non-positive or
+non-finite estimate, with a maximum lag of 10,000. This positive-window method
+is a diagnostic estimator, not a universal optimal-window procedure.
 
 ## Between-chain uncertainty
 
-The parallel TFIM runner computes the sample standard deviation of independent
-chain means and divides by the square root of the chain count. This estimator
-is meaningful only when chains are independently seeded and individually long
-enough to equilibrate and explore their stationary distribution.
+The configured runner computes the sample standard deviation of independent
+chain energy-density means and divides by the square root of the chain count.
+This estimator is unavailable for a single chain and meaningful only when
+chains are independently seeded and individually long enough to equilibrate
+and explore their stationary distribution.
+
+The summary also reports split \(\hat R\) for the expansion-order series. Values
+above 1.01 generate a warning. This is a useful agreement diagnostic, not proof
+of equilibration or ergodicity.
 
 ## Reporting
 

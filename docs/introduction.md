@@ -11,10 +11,9 @@ The project is designed around three goals:
 - Keep sampled local matrix elements non-negative for supported models.
 - Make validation and reproducibility part of the normal workflow.
 
-Version 0.1.0 provides a Rust library and executable examples. A stable
-configuration-file interface and result schema are planned for a later
-release. The guide documents the software that exists today and labels planned
-features as such.
+Version 0.1.0 provides a Rust library, a strict configuration-driven CLI, and
+versioned result artifacts. Focused benchmark and exact-reference examples
+remain available to developers.
 
 ## What the program computes
 
@@ -39,7 +38,8 @@ thermalization, and sample count are varied.
 ## Where to begin
 
 1. Read [Physical conventions](physical-conventions.md).
-2. Run the small example in [Getting started](getting-started.md).
+2. Validate and run the small configuration in
+   [Getting started](getting-started.md).
 3. Select the relevant page under [Models](models/index.md).
 4. Plan convergence tests using [Convergence](simulation/convergence.md).
 5. Record the information listed under

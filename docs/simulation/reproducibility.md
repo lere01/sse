@@ -1,9 +1,9 @@
 # Reproducibility
 
-The parallel TFIM runner derives each chain seed deterministically from a master
+The configured runner derives each chain seed deterministically from a master
 seed and chain index. Chain trajectories are therefore independent of the
-number of Rayon worker threads used to schedule them. A regression test checks
-this property.
+number of Rayon worker threads used to schedule them within a software version.
+A regression test checks this property.
 
 Record the following for every scientific result:
 
@@ -20,9 +20,15 @@ Record the following for every scientific result:
 - TFIM, local Rydberg, or global reference update
 - Any post-processing used to estimate uncertainty
 
-Version 0.1.0 prints summaries but does not yet create a versioned result
-manifest. Until that artifact format is implemented, preserve the exact command
-line and redirect program output into a study-specific directory.
+`sse run` preserves the submitted and resolved configurations, software
+version, optional embedded Git revision, deterministic chain seeds, raw
+expansion-order series, and named statistical diagnostics. Archive the entire
+run directory rather than copying only the terminal summary. See
+[Run artifacts and restart](../artifacts.md).
+
+The random-number generator implementation may change across software
+versions. Reproduction therefore requires both the seed and recorded software
+version, not the seed alone.
 
 Never treat a random seed as a substitute for convergence testing. Exact
 reproducibility can reproduce a biased or insufficiently equilibrated result.

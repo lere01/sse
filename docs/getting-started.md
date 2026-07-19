@@ -11,6 +11,9 @@ cargo test --all-targets
 cargo test --doc
 ```
 
+The crates.io package identifier is `quantum-sse`; the installed executable and
+Rust library name are both `sse`.
+
 ## First TFIM calculation
 
 Validate the included configuration, then run it:

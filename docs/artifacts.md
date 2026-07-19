@@ -36,7 +36,8 @@ chain_index,measurement_index,expansion_order
 
 `summary.json` reports the mean of independent-chain energy densities,
 between-chain standard error, split \(\hat R\), minimum effective sample size,
-and explicit diagnostic warnings.
+and explicit diagnostic warnings. Between-chain standard error is `null` when
+only one chain is present because it is not statistically defined.
 
 ## Restart behavior
 

@@ -35,7 +35,7 @@ The implemented Hamiltonian is
 
 $$
 \begin{equation}
-H = -\frac{omega}{2} \sum_i \sigma^x_i - detuning \sum_i n_i + \sum_{i<j} \frac{C^6}{r(i,j)}^6 n_i n_j.
+H = -\frac{omega}{2} \sum_i \sigma^x_i - detuning \sum_i n_i + \sum_{i<j} \frac{C^6}{r(i,j)^6} n_i n_j.
 \end{equation}
 $$
 

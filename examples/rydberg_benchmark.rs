@@ -182,7 +182,7 @@ fn dense_rydberg_hamiltonian(
     }
 
     let mut matrix = vec![vec![0.0; dimension]; dimension];
-    for basis in 0..dimension {
+    for (basis, matrix_row) in matrix.iter_mut().enumerate() {
         let particles = basis.count_ones() as f64;
         let mut diagonal = -detuning * particles;
         for &(site_i, site_j, interaction) in &interactions {
@@ -190,11 +190,11 @@ fn dense_rydberg_hamiltonian(
             let occupied_j = (basis >> site_j) & 1;
             diagonal += interaction * (occupied_i * occupied_j) as f64;
         }
-        matrix[basis][basis] = diagonal;
+        matrix_row[basis] = diagonal;
 
         for site in 0..num_sites {
             let flipped = basis ^ (1 << site);
-            matrix[basis][flipped] = 0.5 * omega;
+            matrix_row[flipped] = 0.5 * omega;
         }
     }
     Ok(matrix)
@@ -213,9 +213,9 @@ fn symmetric_eigenvalues(mut matrix: Vec<Vec<f64>>) -> Vec<f64> {
         let mut row = 0;
         let mut column = 0;
         let mut largest = 0.0_f64;
-        for i in 0..dimension {
-            for j in (i + 1)..dimension {
-                let candidate = matrix[i][j].abs();
+        for (i, matrix_row) in matrix.iter().enumerate() {
+            for (j, &value) in matrix_row.iter().enumerate().skip(i + 1) {
+                let candidate = value.abs();
                 if candidate > largest {
                     largest = candidate;
                     row = i;
@@ -234,10 +234,7 @@ fn symmetric_eigenvalues(mut matrix: Vec<Vec<f64>>) -> Vec<f64> {
         let cosine = angle.cos();
         let sine = angle.sin();
 
-        for index in 0..dimension {
-            if index == row || index == column {
-                continue;
-            }
+        for index in (0..dimension).filter(|&index| index != row && index != column) {
             let aip = matrix[index][row];
             let aiq = matrix[index][column];
             let rotated_p = cosine * aip - sine * aiq;
@@ -254,7 +251,11 @@ fn symmetric_eigenvalues(mut matrix: Vec<Vec<f64>>) -> Vec<f64> {
         matrix[column][row] = 0.0;
     }
 
-    let mut eigenvalues: Vec<_> = (0..dimension).map(|index| matrix[index][index]).collect();
+    let mut eigenvalues: Vec<_> = matrix
+        .iter()
+        .enumerate()
+        .map(|(index, matrix_row)| matrix_row[index])
+        .collect();
     eigenvalues.sort_by(f64::total_cmp);
     eigenvalues
 }

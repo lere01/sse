@@ -15,6 +15,7 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  SSE_GIT_REVISION: ${{ github.sha }}
 
 jobs:
   build:

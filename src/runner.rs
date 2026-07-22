@@ -1,4 +1,9 @@
 //! Reusable orchestration for validated configurations and durable artifacts.
+//!
+//! The Monte Carlo engine is the published `qslib-quantum` SSE backend; this
+//! module owns everything the library deliberately does not: per-chain
+//! artifact files, resumable scheduling, wall-clock timing, and aggregate
+//! statistical reporting.
 
 use std::error::Error;
 use std::fmt;
@@ -6,18 +11,24 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-use rand::{rngs::StdRng, SeedableRng};
+use qslib::sse::{
+    derive_chain_seed, BasisSseState, ClusterSweepStats, DiagonalSweepStats, LocalSseModel,
+    Operator, SseModel, SseSampler, UpdateScheme,
+};
+use qslib::variational::{autocorrelation, r_hat};
+use rand_chacha::ChaCha20Rng;
+use rand_core::SeedableRng;
 use rayon::prelude::*;
 
-use crate::artifacts::{read_json, write_json_atomic, write_text_atomic};
-use crate::{
-    derive_chain_seed, ArtifactError, ChainArtifact, ChainDiagnostics, ChainSummary,
-    CheckpointIndex, ConfigError, LocalSseModel, ModelConfig, RunConfig, RunManifest, RunStatus,
-    RunSummary, RydbergUpdate, SSEState, SimulationConfig, SseModel, SseSampler,
+use crate::artifacts::{
+    read_json, write_json_atomic, write_text_atomic, ArtifactError, ChainArtifact,
+    ChainDiagnostics, ChainSummary, CheckpointIndex, RunManifest, RunStatus, RunSummary,
     ThermodynamicArtifact, TimingArtifact, UpdateStatistics, ARTIFACT_SCHEMA_VERSION,
 };
+use crate::config::{ConfigError, ModelConfig, RunConfig, RydbergUpdate};
+use crate::model::initial_bits;
 
 /// Output-directory behavior requested by a caller.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -134,7 +145,8 @@ pub fn run_to_directory(
 fn run_inner(config: &RunConfig, directory: &Path) -> Result<(RunSummary, usize), RunnerError> {
     let geometry = config.model.geometry().build()?;
     let model = Arc::new(config.model.build_model(&geometry)?);
-    let initial_state = Arc::new(config.initial_state.build(model.num_sites())?);
+    let spins = config.initial_state.build(model.num_sites())?;
+    let initial_state = Arc::new(initial_bits(config.model.legacy_kind(), &spins));
 
     let mut chains = Vec::with_capacity(config.execution.chains);
     let mut pending = Vec::new();
@@ -187,88 +199,177 @@ fn run_inner(config: &RunConfig, directory: &Path) -> Result<(RunSummary, usize)
     Ok((summary, reused_chains))
 }
 
+fn update_scheme(model: &ModelConfig) -> UpdateScheme {
+    match model {
+        ModelConfig::Tfim { .. } => UpdateScheme::TfimCluster,
+        ModelConfig::Rydberg { update, .. } => match update {
+            RydbergUpdate::Local => UpdateScheme::RydbergLocal,
+            RydbergUpdate::GlobalReference => UpdateScheme::RydbergGlobalReference,
+        },
+    }
+}
+
 fn run_chain(
     config: &RunConfig,
     model: Arc<LocalSseModel>,
-    initial_state: &[crate::Spin],
+    initial_state: &[qslib::BasisBit],
     chain_index: usize,
 ) -> Result<ChainArtifact, RunnerError> {
+    let chain_error = |message: String| RunnerError::Chain {
+        chain_index,
+        message,
+    };
     let seed = derive_chain_seed(config.execution.seed, chain_index as u64);
-    let state = SSEState::new(
-        model.as_ref(),
+    let state = BasisSseState::new(
         initial_state.to_vec(),
-        config.simulation.operator_string_length,
+        vec![Operator::identity(); config.simulation.operator_string_length],
     )
-    .map_err(|error| RunnerError::Chain {
-        chain_index,
-        message: error.to_string(),
-    })?;
-    let rng = StdRng::seed_from_u64(seed);
-    let mut sampler = SseSampler::with_shared_model(model, state, config.simulation.beta, rng)
-        .map_err(|error| RunnerError::Chain {
-            chain_index,
-            message: error.to_string(),
-        })?;
-    let schedule = SimulationConfig::from(config.simulation);
-    let recorded = match &config.model {
-        ModelConfig::Tfim { .. } => sampler.run_tfim_recorded(schedule),
-        ModelConfig::Rydberg { update, .. } => match update {
-            RydbergUpdate::Local => sampler.run_rydberg_recorded(schedule),
-            RydbergUpdate::GlobalReference => {
-                sampler.run_rydberg_global_reference_recorded(schedule)
-            }
-        },
-    }
-    .map_err(|error| RunnerError::Chain {
-        chain_index,
-        message: error.to_string(),
-    })?;
+    .map_err(|error| chain_error(error.to_string()))?;
+    let mut sampler = SseSampler::new(
+        (*model).clone(),
+        state,
+        config.simulation.beta,
+        ChaCha20Rng::from_seed(seed),
+    )
+    .map_err(|error| chain_error(error.to_string()))?;
+    let scheme = update_scheme(&config.model);
 
-    let expansion_orders: Vec<_> = recorded
-        .measurements
-        .iter()
-        .map(|measurement| measurement.expansion_order)
-        .collect();
+    let run_started = Instant::now();
+    let mut diagonal_total = DiagonalSweepStats::default();
+    let mut cluster_total = ClusterSweepStats::default();
+    let mut diagonal_seconds = 0.0;
+    let mut cluster_seconds = 0.0;
+    let mut accumulation_seconds = 0.0;
+
+    let sweep = |sampler: &mut SseSampler<LocalSseModel, ChaCha20Rng>,
+                 diagonal_total: &mut DiagonalSweepStats,
+                 cluster_total: &mut ClusterSweepStats,
+                 diagonal_seconds: &mut f64,
+                 cluster_seconds: &mut f64|
+     -> Result<(), RunnerError> {
+        sampler.ensure_operator_headroom();
+        let started = Instant::now();
+        let diagonal = sampler
+            .diagonal_sweep()
+            .map_err(|error| chain_error(error.to_string()))?;
+        *diagonal_seconds += started.elapsed().as_secs_f64();
+        let started = Instant::now();
+        let clusters = match scheme {
+            UpdateScheme::TfimCluster => sampler.tfim_cluster_sweep(),
+            UpdateScheme::RydbergLocal => sampler.rydberg_local_sweep(),
+            UpdateScheme::RydbergGlobalReference => sampler.rydberg_global_cluster_sweep(),
+            UpdateScheme::Local => unreachable!("runner never selects the plain local scheme"),
+        }
+        .map_err(|error| chain_error(error.to_string()))?;
+        *cluster_seconds += started.elapsed().as_secs_f64();
+        add_diagonal(diagonal_total, diagonal);
+        add_clusters(cluster_total, clusters);
+        Ok(())
+    };
+
+    let thermalization_started = Instant::now();
+    for _ in 0..config.simulation.thermalization_sweeps {
+        sweep(
+            &mut sampler,
+            &mut diagonal_total,
+            &mut cluster_total,
+            &mut diagonal_seconds,
+            &mut cluster_seconds,
+        )?;
+    }
+    let thermalization_seconds = thermalization_started.elapsed().as_secs_f64();
+
+    let mut accumulator = qslib::sse::ThermodynamicAccumulator::default();
+    let mut expansion_orders = Vec::with_capacity(config.simulation.measurement_sweeps);
+    let measurement_started = Instant::now();
+    for _ in 0..config.simulation.measurement_sweeps {
+        for _ in 0..config.simulation.sweeps_per_measurement {
+            sweep(
+                &mut sampler,
+                &mut diagonal_total,
+                &mut cluster_total,
+                &mut diagonal_seconds,
+                &mut cluster_seconds,
+            )?;
+        }
+        let started = Instant::now();
+        let order = sampler.state().expansion_order();
+        accumulator.record(order);
+        expansion_orders.push(order);
+        accumulation_seconds += started.elapsed().as_secs_f64();
+    }
+    let measurement_seconds = measurement_started.elapsed().as_secs_f64();
+
+    let thermodynamics = accumulator
+        .results(
+            config.simulation.beta,
+            sampler.model().energy_shift(),
+            sampler.model().num_sites(),
+        )
+        .ok_or_else(|| chain_error("no measurements were recorded".to_string()))?;
     let diagnostics = diagnose_chain(
         &expansion_orders,
         config.simulation.beta,
         sampler.model().num_sites(),
     );
-    let result = recorded.simulation;
+
     Ok(ChainArtifact {
         artifact_schema_version: ARTIFACT_SCHEMA_VERSION.to_string(),
         chain_index,
-        seed,
+        seed: seed_hex(&seed),
         thermodynamics: ThermodynamicArtifact {
-            samples: result.thermodynamics.samples,
-            mean_expansion_order: result.thermodynamics.mean_expansion_order,
-            energy: result.thermodynamics.energy,
-            energy_per_site: result.thermodynamics.energy_per_site,
-            heat_capacity: result.thermodynamics.heat_capacity,
-            heat_capacity_per_site: result.thermodynamics.heat_capacity_per_site,
+            samples: thermodynamics.samples,
+            mean_expansion_order: thermodynamics.mean_expansion_order,
+            energy: thermodynamics.energy,
+            energy_per_site: thermodynamics.energy_per_site,
+            heat_capacity: thermodynamics.heat_capacity,
+            heat_capacity_per_site: thermodynamics.heat_capacity_per_site,
         },
         updates: UpdateStatistics {
-            insertions_proposed: result.diagonal.insertions_proposed,
-            insertions_accepted: result.diagonal.insertions_accepted,
-            removals_proposed: result.diagonal.removals_proposed,
-            removals_accepted: result.diagonal.removals_accepted,
-            clusters: result.clusters.clusters,
-            flipped_clusters: result.clusters.flipped_clusters,
-            vertices_toggled: result.clusters.vertices_toggled,
-            proposals: result.clusters.proposals,
-            proposals_accepted: result.clusters.proposals_accepted,
+            insertions_proposed: diagonal_total.insertions_proposed,
+            insertions_accepted: diagonal_total.insertions_accepted,
+            removals_proposed: diagonal_total.removals_proposed,
+            removals_accepted: diagonal_total.removals_accepted,
+            clusters: cluster_total.clusters,
+            flipped_clusters: cluster_total.flipped_clusters,
+            vertices_toggled: cluster_total.vertices_toggled,
+            proposals: cluster_total.proposals,
+            proposals_accepted: cluster_total.proposals_accepted,
         },
         timing: TimingArtifact {
-            total_seconds: result.timing.total.as_secs_f64(),
-            thermalization_seconds: result.timing.thermalization.as_secs_f64(),
-            measurement_seconds: result.timing.measurement.as_secs_f64(),
-            diagonal_update_seconds: result.timing.diagonal_updates.as_secs_f64(),
-            off_diagonal_update_seconds: result.timing.cluster_updates.as_secs_f64(),
-            accumulation_seconds: result.timing.accumulation.as_secs_f64(),
+            total_seconds: run_started.elapsed().as_secs_f64(),
+            thermalization_seconds,
+            measurement_seconds,
+            diagonal_update_seconds: diagonal_seconds,
+            off_diagonal_update_seconds: cluster_seconds,
+            accumulation_seconds,
         },
         diagnostics,
         expansion_orders,
     })
+}
+
+fn add_diagonal(total: &mut DiagonalSweepStats, sweep: DiagonalSweepStats) {
+    total.insertions_proposed += sweep.insertions_proposed;
+    total.insertions_accepted += sweep.insertions_accepted;
+    total.removals_proposed += sweep.removals_proposed;
+    total.removals_accepted += sweep.removals_accepted;
+}
+
+fn add_clusters(total: &mut ClusterSweepStats, sweep: ClusterSweepStats) {
+    total.clusters += sweep.clusters;
+    total.flipped_clusters += sweep.flipped_clusters;
+    total.vertices_toggled += sweep.vertices_toggled;
+    total.proposals += sweep.proposals;
+    total.proposals_accepted += sweep.proposals_accepted;
+}
+
+fn seed_hex(seed: &[u8; 32]) -> String {
+    let mut text = String::with_capacity(64);
+    for byte in seed {
+        write!(text, "{byte:02x}").expect("writing to a String cannot fail");
+    }
+    text
 }
 
 fn validate_chain_artifact(
@@ -276,7 +377,10 @@ fn validate_chain_artifact(
     expected_index: usize,
     chain: &ChainArtifact,
 ) -> Result<(), RunnerError> {
-    let expected_seed = derive_chain_seed(config.execution.seed, expected_index as u64);
+    let expected_seed = seed_hex(&derive_chain_seed(
+        config.execution.seed,
+        expected_index as u64,
+    ));
     if chain.artifact_schema_version != ARTIFACT_SCHEMA_VERSION
         || chain.chain_index != expected_index
         || chain.seed != expected_seed
@@ -289,17 +393,23 @@ fn validate_chain_artifact(
     Ok(())
 }
 
+/// Computes serial-correlation diagnostics with the qslib Geyer estimator.
+///
+/// The integrated autocorrelation time follows the qslib convention (floored
+/// at one, effective sample size `N / tau`). Degenerate series fall back to
+/// fully independent defaults.
 fn diagnose_chain(orders: &[usize], beta: f64, num_sites: usize) -> ChainDiagnostics {
     let count = orders.len();
-    if count < 2 {
-        return ChainDiagnostics {
-            expansion_order_variance: 0.0,
-            integrated_autocorrelation_time: 0.5,
-            effective_sample_size: count as f64,
-            energy_standard_error_per_site: 0.0,
-        };
-    }
     let count_f = count as f64;
+    let independent = |sample_variance: f64| ChainDiagnostics {
+        expansion_order_variance: sample_variance,
+        integrated_autocorrelation_time: 1.0,
+        effective_sample_size: count_f,
+        energy_standard_error_per_site: 0.0,
+    };
+    if count < 2 {
+        return independent(0.0);
+    }
     let mean = orders.iter().map(|&value| value as f64).sum::<f64>() / count_f;
     let squared_deviations = orders
         .iter()
@@ -311,34 +421,18 @@ fn diagnose_chain(orders: &[usize], beta: f64, num_sites: usize) -> ChainDiagnos
     let sample_variance = squared_deviations / (count_f - 1.0);
     let population_variance = squared_deviations / count_f;
     if population_variance <= f64::EPSILON {
-        return ChainDiagnostics {
-            expansion_order_variance: sample_variance,
-            integrated_autocorrelation_time: 0.5,
-            effective_sample_size: count_f,
-            energy_standard_error_per_site: 0.0,
-        };
+        return independent(sample_variance);
     }
 
-    let mut correlation_sum = 0.0;
-    let maximum_lag = (count / 2).min(10_000);
-    for lag in 1..=maximum_lag {
-        let covariance = orders[..count - lag]
-            .iter()
-            .zip(&orders[lag..])
-            .map(|(&left, &right)| (left as f64 - mean) * (right as f64 - mean))
-            .sum::<f64>()
-            / (count - lag) as f64;
-        let correlation = covariance / population_variance;
-        if !correlation.is_finite() || correlation <= 0.0 {
-            break;
-        }
-        correlation_sum += correlation;
-    }
-    let tau = 0.5 + correlation_sum;
-    let effective = (count_f / (2.0 * tau)).clamp(1.0, count_f);
+    let series: Vec<f64> = orders.iter().map(|&value| value as f64).collect();
+    let maximum_lag = (count / 2).clamp(1, 10_000);
+    let Ok(estimate) = autocorrelation(&series, maximum_lag) else {
+        return independent(sample_variance);
+    };
+    let effective = estimate.effective_sample_size().clamp(1.0, count_f);
     ChainDiagnostics {
         expansion_order_variance: sample_variance,
-        integrated_autocorrelation_time: tau,
+        integrated_autocorrelation_time: estimate.integrated_time(),
         effective_sample_size: effective,
         energy_standard_error_per_site: (population_variance / effective).sqrt()
             / (beta * num_sites as f64),
@@ -406,7 +500,7 @@ fn summarize(config: &RunConfig, num_sites: usize, chains: &[ChainArtifact]) -> 
             .iter()
             .map(|chain| ChainSummary {
                 chain_index: chain.chain_index,
-                seed: chain.seed,
+                seed: chain.seed.clone(),
                 energy_per_site: chain.thermodynamics.energy_per_site,
                 heat_capacity_per_site: chain.thermodynamics.heat_capacity_per_site,
                 effective_sample_size: chain.diagnostics.effective_sample_size,
@@ -417,6 +511,11 @@ fn summarize(config: &RunConfig, num_sites: usize, chains: &[ChainArtifact]) -> 
     }
 }
 
+/// Split-chain potential scale reduction through the qslib classic estimator.
+///
+/// Each chain's expansion-order series is split into equal first and last
+/// halves, so the classic equal-length R-hat over the split sequences equals
+/// the split-chain diagnostic.
 fn split_r_hat(chains: &[ChainArtifact]) -> Option<f64> {
     let half_length = chains
         .iter()
@@ -425,46 +524,23 @@ fn split_r_hat(chains: &[ChainArtifact]) -> Option<f64> {
     if chains.len() < 2 || half_length < 2 {
         return None;
     }
-    let sequences: Vec<&[usize]> = chains
+    let sequences: Vec<Vec<f64>> = chains
         .iter()
         .flat_map(|chain| {
             let values = chain.expansion_orders.as_slice();
             [
-                &values[..half_length],
-                &values[values.len() - half_length..],
+                values[..half_length]
+                    .iter()
+                    .map(|&value| value as f64)
+                    .collect::<Vec<_>>(),
+                values[values.len() - half_length..]
+                    .iter()
+                    .map(|&value| value as f64)
+                    .collect::<Vec<_>>(),
             ]
         })
         .collect();
-    let means: Vec<f64> = sequences
-        .iter()
-        .map(|values| values.iter().map(|&value| value as f64).sum::<f64>() / half_length as f64)
-        .collect();
-    let variances: Vec<f64> = sequences
-        .iter()
-        .zip(&means)
-        .map(|(values, mean)| {
-            values
-                .iter()
-                .map(|&value| (value as f64 - mean).powi(2))
-                .sum::<f64>()
-                / (half_length - 1) as f64
-        })
-        .collect();
-    let sequence_count = sequences.len() as f64;
-    let mean_of_means = means.iter().sum::<f64>() / sequence_count;
-    let between = half_length as f64
-        * means
-            .iter()
-            .map(|mean| (mean - mean_of_means).powi(2))
-            .sum::<f64>()
-        / (sequence_count - 1.0);
-    let within = variances.iter().sum::<f64>() / sequence_count;
-    if within <= f64::EPSILON {
-        return None;
-    }
-    let estimated =
-        ((half_length - 1) as f64 / half_length as f64) * within + between / half_length as f64;
-    Some((estimated / within).sqrt())
+    r_hat(&sequences).ok().map(|diagnostic| diagnostic.value())
 }
 
 fn write_measurements_csv(directory: &Path, chains: &[ChainArtifact]) -> Result<(), RunnerError> {
@@ -687,13 +763,14 @@ impl From<ArtifactError> for RunnerError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
+    use crate::config::{
         BoundaryConfig, ExecutionSettings, GeometryConfig, InitialState, SimulationSettings,
+        RUN_SCHEMA_VERSION,
     };
 
     fn tiny_config() -> RunConfig {
         RunConfig {
-            schema_version: crate::RUN_SCHEMA_VERSION.to_string(),
+            schema_version: RUN_SCHEMA_VERSION.to_string(),
             name: "runner test".into(),
             model: ModelConfig::Tfim {
                 geometry: GeometryConfig::Chain {
@@ -763,12 +840,44 @@ mod tests {
             omega: 1.0,
             detuning: 0.5,
             c6: 1.0,
-            update: RydbergUpdate::Local,
+            update: crate::config::RydbergUpdate::Local,
         };
 
         let outcome = run_to_directory(&config, None, &directory, RunMode::Fresh).unwrap();
         assert_eq!(outcome.summary.model, "rydberg");
         assert_eq!(outcome.summary.samples, 16);
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn one_site_tfim_chain_matches_exact_thermal_energy() {
+        let directory = std::env::temp_dir().join(format!(
+            "sse-runner-exact-test-{}-{}",
+            std::process::id(),
+            unix_seconds()
+        ));
+        if directory.exists() {
+            fs::remove_dir_all(&directory).unwrap();
+        }
+        let mut config = tiny_config();
+        config.model = ModelConfig::Tfim {
+            geometry: GeometryConfig::Chain {
+                length: 1,
+                boundary: BoundaryConfig::Open,
+            },
+            j: 0.0,
+            h: 1.0,
+        };
+        config.simulation.beta = 2.0;
+        config.simulation.operator_string_length = 32;
+        config.simulation.thermalization_sweeps = 2_000;
+        config.simulation.measurement_sweeps = 30_000;
+        config.execution.chains = 1;
+        config.execution.threads = 1;
+
+        let outcome = run_to_directory(&config, None, &directory, RunMode::Fresh).unwrap();
+        let exact = -2.0_f64.tanh();
+        assert!((outcome.summary.energy_per_site - exact).abs() < 0.03);
         fs::remove_dir_all(directory).unwrap();
     }
 }

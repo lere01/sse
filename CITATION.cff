@@ -8,8 +8,8 @@ authors:
 repository-code: "https://github.com/lere01/sse"
 url: "https://lere01.github.io/sse/"
 license: Apache-2.0
-version: 0.1.0
-date-released: 2026-07-19
+version: 0.2.0
+date-released: 2026-07-22
 keywords:
   - quantum Monte Carlo
   - stochastic series expansion

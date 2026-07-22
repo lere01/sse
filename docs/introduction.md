@@ -11,7 +11,8 @@ The project is designed around three goals:
 - Keep sampled local matrix elements non-negative for supported models.
 - Make validation and reproducibility part of the normal workflow.
 
-Version 0.1.0 provides a Rust library, a strict configuration-driven CLI, and
+Version 0.2.0 provides a strict configuration-driven CLI over the published
+`qslib-quantum` SSE engine, and
 versioned result artifacts. Focused benchmark and exact-reference examples
 remain available to developers.
 

@@ -1,8 +1,8 @@
 [package]
 name = "quantum-sse"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
-rust-version = "1.80"
+rust-version = "1.85"
 license = "Apache-2.0"
 description = "Finite-temperature stochastic series expansion quantum Monte Carlo for lattice models"
 repository = "https://github.com/lere01/sse.git"
@@ -13,16 +13,15 @@ publish = ["crates-io"]
 keywords = ["quantum-monte-carlo", "physics", "lattice", "spin", "rydberg"]
 categories = ["science", "simulation"]
 
-[lib]
-name = "sse"
-
 [[bin]]
 name = "sse"
 path = "src/main.rs"
 
 [dependencies]
 clap = { version = "=4.5.49", features = ["derive"] }
-rand = "0.9.2"
+qslib-quantum = { version = "0.2.0", features = ["sse", "variational"] }
+rand_chacha = "0.10.0"
+rand_core = "0.10.1"
 rayon = "1.12.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

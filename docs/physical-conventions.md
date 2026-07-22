@@ -25,7 +25,8 @@ The sampled basis is the Pauli-z basis:
 \sigma^z |\downarrow\rangle = -|\downarrow\rangle.
 \]
 
-In the Rust API these states are `Spin::Up` and `Spin::Down`. Rydberg models
+In the configuration schema these states are the legacy `up` and `down`
+labels, mapped model-dependently onto canonical qslib basis bits. Rydberg models
 interpret them as occupation values
 
 \[

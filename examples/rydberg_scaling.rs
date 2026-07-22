@@ -8,15 +8,17 @@
 //!     [measurements] [local|global] [seed]
 //! ```
 //!
-//! The example uses an open square lattice. The local update is the production
-//! path; the global corrected update is available as a comparison reference.
+//! The example uses an open square lattice. The local world-line update is the
+//! production path; the global corrected update is available as a comparison
+//! reference. Both kernels come from the qslib SSE backend.
 
 use std::error::Error;
-use std::sync::Arc;
 use std::time::Instant;
 
-use rand::{rngs::StdRng, SeedableRng};
-use sse::{BoundaryCondition, Geometry, LocalSseModel, SSEState, Spin, SseModel, SseSampler};
+use qslib::sse::{derive_chain_seed, BasisSseState, LocalSseModel, Operator, SseModel, SseSampler};
+use qslib::{BasisBit, Boundary, RectangularGeometry, SiteId};
+use rand_chacha::ChaCha20Rng;
+use rand_core::SeedableRng;
 
 /// Parses arguments, samples energy density, and reports correlation diagnostics.
 fn main() -> Result<(), Box<dyn Error>> {
@@ -33,19 +35,39 @@ fn main() -> Result<(), Box<dyn Error>> {
         return Err("update must be either 'local' or 'global'".into());
     }
 
-    let geometry = Geometry::square(size, BoundaryCondition::Open)?;
-    let model = Arc::new(LocalSseModel::rydberg(&geometry, omega, detuning, c6)?);
-    let num_sites = model.num_sites();
+    let geometry = RectangularGeometry::new(size, size, Boundary::Open, Boundary::Open)?;
+    let num_sites = geometry.site_count().get();
+    let mut interactions = Vec::new();
+    for first in 0..num_sites as u32 {
+        for second in (first + 1)..num_sites as u32 {
+            let displacement =
+                geometry.minimum_image_displacement(SiteId::new(first), SiteId::new(second))?;
+            let squared = displacement.x() * displacement.x() + displacement.y() * displacement.y();
+            interactions.push((first, second, c6 / squared.powi(3)));
+        }
+    }
+    let model =
+        LocalSseModel::rydberg(num_sites, &vec![detuning; num_sites], &interactions, omega)?;
     let cutoff = (2.0 * beta * model.energy_shift()).ceil().max(64.0) as usize;
-    let state = SSEState::new(&*model, vec![Spin::Down; num_sites], cutoff)?;
-    let rng = StdRng::seed_from_u64(seed);
-    let mut sampler = SseSampler::with_shared_model(model, state, beta, rng)?;
+    // Legacy all-down Rydberg start state: down is unoccupied, canonical bit zero.
+    let state = BasisSseState::new(
+        vec![BasisBit::Zero; num_sites],
+        vec![Operator::identity(); cutoff],
+    )?;
+    let mut sampler = SseSampler::new(
+        model,
+        state,
+        beta,
+        ChaCha20Rng::from_seed(derive_chain_seed(seed, 0)),
+    )?;
 
     for _ in 0..thermalization {
+        sampler.ensure_operator_headroom();
+        sampler.diagonal_sweep()?;
         if update == "local" {
-            sampler.rydberg_sweep()?;
+            sampler.rydberg_local_sweep()?;
         } else {
-            sampler.rydberg_global_sweep()?;
+            sampler.rydberg_global_cluster_sweep()?;
         }
     }
 
@@ -54,10 +76,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut proposed = 0_usize;
     let mut accepted = 0_usize;
     for _ in 0..measurements {
-        let (_, stats) = if update == "local" {
-            sampler.rydberg_sweep()?
+        sampler.ensure_operator_headroom();
+        sampler.diagonal_sweep()?;
+        let stats = if update == "local" {
+            sampler.rydberg_local_sweep()?
         } else {
-            sampler.rydberg_global_sweep()?
+            sampler.rydberg_global_cluster_sweep()?
         };
         proposed += stats.proposals;
         accepted += stats.proposals_accepted;

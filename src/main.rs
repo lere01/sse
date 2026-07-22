@@ -1,4 +1,14 @@
 //! Physicist-facing command-line interface for reproducible SSE simulations.
+//!
+//! The Monte Carlo engine is the published
+//! [`qslib-quantum`](https://crates.io/crates/qslib-quantum) SSE backend; this
+//! binary owns configuration, orchestration, durable artifacts, and
+//! statistical reporting.
+
+mod artifacts;
+mod config;
+mod model;
+mod runner;
 
 use std::error::Error;
 use std::fs;
@@ -6,7 +16,10 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
-use sse::{inspect_run, run_to_directory, RunConfig, RunMode, RunStatus};
+
+use crate::artifacts::{inspect_run, RunStatus};
+use crate::config::RunConfig;
+use crate::runner::{run_to_directory, RunMode};
 
 #[derive(Debug, Parser)]
 #[command(

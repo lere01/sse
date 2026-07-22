@@ -5,6 +5,27 @@ All notable changes to this project are documented here. The project follows
 
 ## Unreleased
 
+## 0.2.0 - 2026-07-22
+
+### Changed
+
+- The Monte Carlo engine is now the published `qslib-quantum` 0.2.0 SSE
+  backend; this crate is a thin binary and no longer ships a Rust library.
+  The TFIM linked-cluster, Rydberg local world-line, and global cluster
+  reference kernels were upstreamed and are consumed from qslib.
+- Artifacts moved to the `sse-artifacts-v2` schema: chain seeds are
+  hex-encoded 32-byte values under the versioned qslib `qslib-seed-v1`
+  ChaCha20 scheme, and autocorrelation diagnostics follow the qslib Geyer
+  convention (integrated time floored at one). Version 1 artifacts cannot be
+  resumed; the `sse-run-v1` configuration format is unchanged.
+- Chain diagnostics (integrated autocorrelation time, effective sample size,
+  split R-hat) are computed by `qslib-quantum-variational` instead of
+  hand-rolled estimators.
+- The TFIM benchmark example uses open boundaries, matching its stored
+  reference energies; the previous revision sampled a periodic lattice while
+  comparing against open-lattice references.
+- Minimum supported Rust is 1.85.
+
 ### Added
 
 - Strict, versioned `sse-run-v1` YAML configurations

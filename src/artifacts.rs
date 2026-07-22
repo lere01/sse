@@ -10,7 +10,12 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 /// Artifact schema emitted by this release.
-pub const ARTIFACT_SCHEMA_VERSION: &str = "sse-artifacts-v1";
+///
+/// Version 2 replaces the legacy 64-bit chain seeds with hex-encoded 32-byte
+/// seeds derived under the versioned qslib `qslib-seed-v1` scheme, and its
+/// autocorrelation diagnostics use the qslib Geyer convention (integrated
+/// time floored at one). Version 1 artifacts cannot be resumed.
+pub const ARTIFACT_SCHEMA_VERSION: &str = "sse-artifacts-v2";
 
 static TEMP_FILE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
@@ -142,8 +147,8 @@ pub struct ChainArtifact {
     pub artifact_schema_version: String,
     /// Stable zero-based chain index.
     pub chain_index: usize,
-    /// Deterministically derived chain seed.
-    pub seed: u64,
+    /// Hex-encoded 32-byte chain seed under the qslib `qslib-seed-v1` scheme.
+    pub seed: String,
     /// Thermodynamic estimates.
     pub thermodynamics: ThermodynamicArtifact,
     /// Update proposal and acceptance counts.
@@ -187,13 +192,13 @@ pub struct RunSummary {
 }
 
 /// Compact per-chain entry embedded in [`RunSummary`].
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ChainSummary {
     /// Stable zero-based chain index.
     pub chain_index: usize,
-    /// Chain seed.
-    pub seed: u64,
+    /// Hex-encoded 32-byte chain seed under the qslib `qslib-seed-v1` scheme.
+    pub seed: String,
     /// Energy per site.
     pub energy_per_site: f64,
     /// Heat capacity per site.

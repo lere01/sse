@@ -8,17 +8,20 @@
 //!     [seed] [chains] [threads]
 //! ```
 //!
-//! The lattice is square and periodic with `J = 1`. `measurement_sweeps` is
+//! The lattice is square and open with `J = 1`, matching the stored
+//! reference energies. `measurement_sweeps` is
 //! divided across chains. Defaults are 8, 2, 16, 50000, `0x5eed`, at least four
-//! chains, and all available hardware threads.
+//! chains, and all available hardware threads. Sampling uses the qslib TFIM
+//! linked-cluster update scheme.
 
 use std::error::Error;
-use std::sync::Arc;
+use std::time::Instant;
 
-use sse::{
-    run_parallel_tfim, BoundaryCondition, Geometry, LocalSseModel, ParallelSimulationConfig,
-    SimulationConfig, Spin, SseModel,
+use qslib::sse::{
+    run_parallel_chains_with, BasisSseState, LocalSseModel, Operator, SimulationConfig,
+    UpdateScheme,
 };
+use qslib::{BasisBit, Boundary, RectangularGeometry, ShellTolerance};
 
 /// Parses arguments, runs the parallel benchmark, and prints energy diagnostics.
 fn main() -> Result<(), Box<dyn Error>> {
@@ -31,55 +34,79 @@ fn main() -> Result<(), Box<dyn Error>> {
     let chains: usize = argument(6, default_threads.max(4))?;
     let threads: usize = argument(7, default_threads)?;
 
-    let geometry = Geometry::square(linear_size, BoundaryCondition::Periodic)?;
-    let pairs = geometry.pairs_at_distance_squared(1.0, 1.0e-12)?;
-    let model = Arc::new(LocalSseModel::tfim(&geometry, &pairs, 1.0, h_over_j)?);
-    let initial_cutoff = suggested_cutoff(model.num_sites(), beta, h_over_j);
-    let measurements_per_chain = measurement_sweeps.div_ceil(chains);
-    let result = run_parallel_tfim(
-        Arc::clone(&model),
-        &vec![Spin::Up; model.num_sites()],
-        ParallelSimulationConfig {
-            chains,
-            threads,
-            master_seed: seed,
-            beta,
-            operator_string_length: initial_cutoff,
-            simulation: SimulationConfig {
-                thermalization_sweeps: 5_000,
-                measurement_sweeps: measurements_per_chain,
-                sweeps_per_measurement: 1,
-            },
-        },
+    let geometry =
+        RectangularGeometry::new(linear_size, linear_size, Boundary::Open, Boundary::Open)?;
+    let num_sites = geometry.site_count().get();
+    let pairs: Vec<(u32, u32)> = geometry
+        .pairs_at_squared_distance(1.0, ShellTolerance::Absolute(1.0e-12))?
+        .into_iter()
+        .map(|bond| (bond.first().get(), bond.second().get()))
+        .collect();
+    let model = LocalSseModel::tfim(num_sites, &pairs, 1.0, h_over_j)?;
+    let initial_cutoff = suggested_cutoff(num_sites, beta, h_over_j);
+    // Legacy all-up TFIM start state: up is +Z, canonical bit zero.
+    let state = BasisSseState::new(
+        vec![BasisBit::Zero; num_sites],
+        vec![Operator::identity(); initial_cutoff],
     )?;
+    let measurements_per_chain = measurement_sweeps.div_ceil(chains);
+    let started = Instant::now();
+    let results = run_parallel_chains_with(
+        model,
+        state,
+        beta,
+        SimulationConfig {
+            thermalization_sweeps: 5_000,
+            measurement_sweeps: measurements_per_chain,
+            sweeps_per_measurement: 1,
+        },
+        UpdateScheme::TfimCluster,
+        seed,
+        chains,
+        threads,
+    )?;
+    let wall_time = started.elapsed();
+
+    let samples: u64 = results
+        .iter()
+        .map(|result| result.thermodynamics.samples)
+        .sum();
+    let energies: Vec<f64> = results
+        .iter()
+        .map(|result| result.thermodynamics.energy_per_site)
+        .collect();
+    let (energy_per_site, standard_error) = mean_and_standard_error(&energies);
 
     println!("{linear_size}x{linear_size} open TFIM, J=1, h/J={h_over_j}, beta={beta}");
-    println!("chains / Rayon threads: {chains} / {threads}");
-    println!("samples: {}", result.combined_energy.samples);
-    println!(
-        "energy per site: {:.12}",
-        result.combined_energy.energy_per_site
-    );
-    println!(
-        "between-chain standard error: {:.12}",
-        result.combined_energy.chain_standard_error
-    );
-    println!("wall time: {:.3} s", result.wall_time.as_secs_f64());
-    let chain_seconds: f64 = result
-        .chains
-        .iter()
-        .map(|chain| chain.simulation.timing.total.as_secs_f64())
-        .sum();
-    println!("summed chain time: {chain_seconds:.3} s");
+    println!("chains / worker threads: {chains} / {threads}");
+    println!("samples: {samples}");
+    println!("energy per site: {energy_per_site:.12}");
+    println!("between-chain standard error: {standard_error:.12}");
+    println!("wall time: {:.3} s", wall_time.as_secs_f64());
     if let Some(reference) = reference_energy(linear_size, h_over_j) {
         println!("reference energy per site: {reference:.12}");
         println!(
             "absolute difference: {:.12}",
-            (result.combined_energy.energy_per_site - reference).abs()
+            (energy_per_site - reference).abs()
         );
     }
 
     Ok(())
+}
+
+/// Returns the arithmetic mean and between-value standard error.
+fn mean_and_standard_error(values: &[f64]) -> (f64, f64) {
+    let count = values.len() as f64;
+    let mean = values.iter().sum::<f64>() / count;
+    if values.len() < 2 {
+        return (mean, 0.0);
+    }
+    let variance = values
+        .iter()
+        .map(|value| (value - mean) * (value - mean))
+        .sum::<f64>()
+        / (count - 1.0);
+    (mean, (variance / count).sqrt())
 }
 
 /// Estimates a conservative initial operator-string cutoff.

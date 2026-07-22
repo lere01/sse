@@ -11,15 +11,17 @@
 //! The exact dense Jacobi eigensolver intentionally limits the open square
 //! lattice to six sites. The command fails if the SSE mean differs from the
 //! exact thermal energy by more than three between-chain standard errors.
+//! Sampling uses the qslib SSE backend with deterministic chain seeds.
 
 use std::error::Error;
-use std::sync::Arc;
 
-use rand::{rngs::StdRng, SeedableRng};
-use sse::{
-    BoundaryCondition, Geometry, LocalSseModel, SSEState, SimulationConfig, Spin, SseModel,
-    SseSampler,
+use qslib::sse::{
+    derive_chain_seed, BasisSseState, LocalSseModel, Operator, SseModel, SseSampler,
+    ThermodynamicAccumulator,
 };
+use qslib::{BasisBit, Boundary, RectangularGeometry, SiteId};
+use rand_chacha::ChaCha20Rng;
+use rand_core::SeedableRng;
 
 /// Largest site count accepted by the dependency-free dense eigensolver.
 const MAX_EXACT_SITES: usize = 6;
@@ -52,8 +54,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         return Err("measurement sweeps must be positive and chains must be at least two".into());
     }
 
-    let geometry = Geometry::square(linear_size, BoundaryCondition::Open)?;
-    let num_sites = geometry.num_sites();
+    let geometry =
+        RectangularGeometry::new(linear_size, linear_size, Boundary::Open, Boundary::Open)?;
+    let num_sites = geometry.site_count().get();
     if num_sites > MAX_EXACT_SITES {
         return Err(format!(
             "exact diagonalization is limited to {MAX_EXACT_SITES} sites; got {num_sites}"
@@ -61,8 +64,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         .into());
     }
 
-    let model = Arc::new(LocalSseModel::rydberg(&geometry, omega, detuning, c6)?);
-    let hamiltonian = dense_rydberg_hamiltonian(&geometry, omega, detuning, c6)?;
+    let interactions = pair_interactions(&geometry, c6)?;
+    let model =
+        LocalSseModel::rydberg(num_sites, &vec![detuning; num_sites], &interactions, omega)?;
+    let hamiltonian = dense_rydberg_hamiltonian(num_sites, &interactions, omega, detuning);
     let eigenvalues = symmetric_eigenvalues(hamiltonian);
     let thermal = thermal_results(&eigenvalues, beta);
 
@@ -90,23 +95,43 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut proposals = 0_usize;
     let mut accepted = 0_usize;
     for chain in 0..chains {
-        let chain_seed = splitmix64(seed.wrapping_add(chain as u64));
-        let state = SSEState::new(&*model, vec![Spin::Down; num_sites], cutoff)?;
-        let rng = StdRng::seed_from_u64(chain_seed);
-        let mut sampler = SseSampler::with_shared_model(Arc::clone(&model), state, beta, rng)?;
-        let config = SimulationConfig {
-            thermalization_sweeps: 5_000,
-            measurement_sweeps,
-            sweeps_per_measurement: 1,
-        };
-        let result = if update == "local" {
-            sampler.run_rydberg(config)?
-        } else {
-            sampler.run_rydberg_global_reference(config)?
-        };
-        chain_energies.push(result.thermodynamics.energy);
-        proposals += result.clusters.proposals;
-        accepted += result.clusters.proposals_accepted;
+        // Legacy all-down Rydberg start state: down is unoccupied, bit zero.
+        let state = BasisSseState::new(
+            vec![BasisBit::Zero; num_sites],
+            vec![Operator::identity(); cutoff],
+        )?;
+        let mut sampler = SseSampler::new(
+            model.clone(),
+            state,
+            beta,
+            ChaCha20Rng::from_seed(derive_chain_seed(seed, chain as u64)),
+        )?;
+        for _ in 0..5_000 {
+            sampler.ensure_operator_headroom();
+            sampler.diagonal_sweep()?;
+            if update == "local" {
+                sampler.rydberg_local_sweep()?;
+            } else {
+                sampler.rydberg_global_cluster_sweep()?;
+            }
+        }
+        let mut accumulator = ThermodynamicAccumulator::default();
+        for _ in 0..measurement_sweeps {
+            sampler.ensure_operator_headroom();
+            sampler.diagonal_sweep()?;
+            let stats = if update == "local" {
+                sampler.rydberg_local_sweep()?
+            } else {
+                sampler.rydberg_global_cluster_sweep()?
+            };
+            proposals += stats.proposals;
+            accepted += stats.proposals_accepted;
+            accumulator.record(sampler.state().expansion_order());
+        }
+        let results = accumulator
+            .results(beta, sampler.model().energy_shift(), num_sites)
+            .ok_or("no measurements were recorded")?;
+        chain_energies.push(results.energy);
     }
     let sampled = mean_and_standard_error(&chain_energies);
     let difference = (sampled.0 - thermal.energy).abs();
@@ -139,6 +164,27 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// One unordered pair with its resolved `c6 / r^6` coupling.
+type PairInteraction = (u32, u32, f64);
+
+/// Enumerates every unordered pair with its `c6 / r^6` coupling.
+fn pair_interactions(
+    geometry: &RectangularGeometry,
+    c6: f64,
+) -> Result<Vec<PairInteraction>, Box<dyn Error>> {
+    let num_sites = geometry.site_count().get() as u32;
+    let mut interactions = Vec::new();
+    for first in 0..num_sites {
+        for second in (first + 1)..num_sites {
+            let displacement =
+                geometry.minimum_image_displacement(SiteId::new(first), SiteId::new(second))?;
+            let squared = displacement.x() * displacement.x() + displacement.y() * displacement.y();
+            interactions.push((first, second, c6 / squared.powi(3)));
+        }
+    }
+    Ok(interactions)
+}
+
 /// Returns the arithmetic mean and between-value standard error.
 ///
 /// The caller supplies at least two independent chain estimates.
@@ -153,39 +199,22 @@ fn mean_and_standard_error(values: &[f64]) -> (f64, f64) {
     (mean, (variance / count).sqrt())
 }
 
-/// Applies the SplitMix64 output permutation to derive a chain seed.
-fn splitmix64(mut value: u64) -> u64 {
-    value = (value ^ (value >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
-    value = (value ^ (value >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
-    value ^ (value >> 31)
-}
-
 /// Constructs the dense Rydberg Hamiltonian in the occupation basis.
 ///
-/// Basis index bit `i` is the occupation of geometry site `i`. The returned
-/// matrix includes every `c6 / r^6` pair interaction and `omega / 2` spin flip.
+/// Basis index bit `i` is the occupation of geometry site `i`. The matrix
+/// includes every supplied pair interaction and `omega / 2` spin flip.
 fn dense_rydberg_hamiltonian(
-    geometry: &Geometry,
+    num_sites: usize,
+    interactions: &[(u32, u32, f64)],
     omega: f64,
     detuning: f64,
-    c6: f64,
-) -> Result<Vec<Vec<f64>>, Box<dyn Error>> {
-    let num_sites = geometry.num_sites();
-    let dimension = 1_usize
-        .checked_shl(num_sites as u32)
-        .ok_or("Hilbert-space dimension overflow")?;
-    let pairs = geometry.all_pairs();
-    let mut interactions = Vec::with_capacity(pairs.len());
-    for (site_i, site_j) in pairs {
-        let distance = geometry.distance(site_i, site_j)?;
-        interactions.push((site_i as usize, site_j as usize, c6 / distance.powi(6)));
-    }
-
+) -> Vec<Vec<f64>> {
+    let dimension = 1_usize << num_sites;
     let mut matrix = vec![vec![0.0; dimension]; dimension];
     for (basis, matrix_row) in matrix.iter_mut().enumerate() {
         let particles = basis.count_ones() as f64;
         let mut diagonal = -detuning * particles;
-        for &(site_i, site_j, interaction) in &interactions {
+        for &(site_i, site_j, interaction) in interactions {
             let occupied_i = (basis >> site_i) & 1;
             let occupied_j = (basis >> site_j) & 1;
             diagonal += interaction * (occupied_i * occupied_j) as f64;
@@ -197,7 +226,7 @@ fn dense_rydberg_hamiltonian(
             matrix_row[flipped] = 0.5 * omega;
         }
     }
-    Ok(matrix)
+    matrix
 }
 
 /// Computes eigenvalues of a real symmetric matrix using Jacobi rotations.
@@ -318,12 +347,9 @@ mod tests {
 
     #[test]
     fn one_site_matches_analytic_eigenvalues() {
-        let geometry = Geometry::chain(1, BoundaryCondition::Open).unwrap();
         let omega = 1.2;
         let detuning = 0.7;
-        let eigenvalues = symmetric_eigenvalues(
-            dense_rydberg_hamiltonian(&geometry, omega, detuning, 0.0).unwrap(),
-        );
+        let eigenvalues = symmetric_eigenvalues(dense_rydberg_hamiltonian(1, &[], omega, detuning));
         let center = -0.5 * detuning;
         let radius = 0.5 * (detuning * detuning + omega * omega).sqrt();
         assert!((eigenvalues[0] - (center - radius)).abs() < 1.0e-11);

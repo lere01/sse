@@ -12,10 +12,12 @@ The crates.io package is named `quantum-sse` because the unrelated `sse`
 package name was already allocated. The installed command and Rust library
 import remain `sse`.
 
-The current source version is **0.1.0**. It provides a tested Rust library and a
-configuration-driven command-line interface for transverse-field Ising and
-Rydberg simulations. Runs preserve raw measurements, provenance, statistical
-diagnostics, and independently resumable chain artifacts.
+The current source version is **0.2.0**. It provides a configuration-driven
+command-line interface for transverse-field Ising and Rydberg simulations.
+Runs preserve raw measurements, provenance, statistical diagnostics, and
+independently resumable chain artifacts. Since 0.2.0 the Monte Carlo engine is
+the published [`qslib-quantum`](https://crates.io/crates/qslib-quantum) SSE
+backend; this crate is the thin, physicist-facing binary over it.
 
 ## Supported physics
 
@@ -110,7 +112,7 @@ with respect to inverse temperature.
 
 ## Requirements
 
-- Rust 1.80 or newer
+- Rust 1.85 or newer
 - Cargo
 
 Install Rust through [rustup](https://rustup.rs/) if it is not already
@@ -227,42 +229,29 @@ The example constructs the dense Hamiltonian, diagonalizes it with a small
 Jacobi solver, and checks the SSE thermal energy against the exact result. Exact
 validation is intentionally limited to at most six sites.
 
-## Library example
+## Programmatic use
 
-```rust
-use rand::{rngs::StdRng, SeedableRng};
-use sse::{
-    BoundaryCondition, Geometry, LocalSseModel, SSEState, SimulationConfig,
-    Spin, SseModel, SseSampler,
-};
+This crate no longer ships a Rust library; the sampling engine lives in the
+published [`qslib-quantum`](https://crates.io/crates/qslib-quantum) crate.
+Rust programs should depend on it directly:
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let geometry = Geometry::chain(4, BoundaryCondition::Periodic)?;
-    let pairs = geometry.pairs_at_distance_squared(1.0, 1.0e-12)?;
-    let model = LocalSseModel::tfim(&geometry, &pairs, 1.0, 0.5)?;
-    let state = SSEState::new(&model, vec![Spin::Up; model.num_sites()], 64)?;
-    let rng = StdRng::seed_from_u64(7);
-    let mut sampler = SseSampler::new(model, state, 2.0, rng)?;
-
-    let results = sampler.run_tfim(SimulationConfig {
-        thermalization_sweeps: 1_000,
-        measurement_sweeps: 10_000,
-        sweeps_per_measurement: 1,
-    })?;
-
-    println!(
-        "energy per site = {}",
-        results.thermodynamics.energy_per_site
-    );
-    Ok(())
-}
+```toml
+[dependencies]
+qslib-quantum = { version = "0.2.0", features = ["sse"] }
 ```
+
+The qslib SSE backend provides the sign-safe TFIM and Rydberg decompositions,
+the linked-cluster and world-line update families, deterministic chain seeds,
+and recorded measurement series that this binary orchestrates. See the
+[qslib SSE guide](https://lere01.github.io/qslib/sse.html) for the library
+workflow.
 
 ## Reproducibility
 
-Parallel chains derive deterministic seeds from a master seed and chain index.
-Changing the number of Rayon worker threads does not change the individual
-chain trajectories within a software version. The CLI records the following in
+Parallel chains derive deterministic 32-byte seeds from the master seed and
+chain index under the versioned qslib `qslib-seed-v1` scheme. Changing the
+number of Rayon worker threads does not change the individual chain
+trajectories within a software version. The CLI records the following in
 its resolved configuration, manifest, summary, and chain artifacts:
 
 - Software version or Git revision

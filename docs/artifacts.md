@@ -19,7 +19,7 @@ run/
 `config.input.yaml` preserves the submitted text. `config.resolved.yaml` is the
 canonical validated configuration and is the authority for resume checks.
 
-`manifest.json` records the `sse-artifacts-v1` schema, software version, optional
+`manifest.json` records the `sse-artifacts-v2` schema, software version, optional
 embedded Git revision, timestamps, attempt count, lifecycle status, and chain
 completion count.
 

@@ -1,6 +1,6 @@
 # Getting started
 
-Version 0.1.0 is distributed as source and requires a stable Rust toolchain.
+Version 0.2.0 is distributed as source and requires Rust 1.85 or newer.
 Install Rust with [rustup](https://rustup.rs/), clone the repository, and verify
 the complete crate before running a calculation:
 

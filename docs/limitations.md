@@ -1,6 +1,6 @@
 # Known limitations
 
-Version 0.1.0 has the following explicit limitations:
+Version 0.2.0 has the following explicit limitations:
 
 - The `sse-run-v1` schema currently accepts YAML only.
 - Measurement output is CSV and JSON; a columnar format is not yet available.

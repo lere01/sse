@@ -1,6 +1,6 @@
 # Models
 
-Version 0.1.0 provides sign-safe local SSE decompositions for:
+Version 0.2.0 provides sign-safe local SSE decompositions for:
 
 - The ferromagnetic transverse-field Ising model
 - A long-range Rydberg occupation model

@@ -7,7 +7,10 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{BoundaryCondition, Geometry, LocalSseModel, SimulationConfig, Spin, SseModel};
+use qslib::sse::{LegacyModelKind, LegacySpin, LocalSseModel, SimulationConfig, SseModel};
+use qslib::Boundary;
+
+use crate::model::{build_rydberg, build_tfim, ResolvedGeometry};
 
 /// Configuration schema accepted by this release.
 pub const RUN_SCHEMA_VERSION: &str = "sse-run-v1";
@@ -146,31 +149,26 @@ impl ModelConfig {
     ///
     /// Returns a configuration error when geometry or model construction
     /// fails.
-    pub fn build_model(&self, geometry: &Geometry) -> Result<LocalSseModel, ConfigError> {
+    pub fn build_model(&self, geometry: &ResolvedGeometry) -> Result<LocalSseModel, ConfigError> {
         match self {
             Self::Tfim { j, h, .. } => {
-                let pairs = geometry
-                    .pairs_at_distance_squared(1.0, 1.0e-12)
-                    .map_err(|error| ConfigError::validation(error.to_string()))?;
-                LocalSseModel::tfim(geometry, &pairs, *j, *h)
-                    .map_err(|error| ConfigError::validation(error.to_string()))
+                build_tfim(geometry, *j, *h).map_err(ConfigError::validation)
             }
             Self::Rydberg {
                 omega,
                 detuning,
                 c6,
                 ..
-            } => LocalSseModel::rydberg(geometry, *omega, *detuning, *c6)
-                .map_err(|error| ConfigError::validation(error.to_string())),
+            } => build_rydberg(geometry, *omega, *detuning, *c6).map_err(ConfigError::validation),
         }
     }
 
-    /// Returns the selected Rydberg update, or `None` for TFIM.
+    /// Returns the explicit legacy spin-label convention for this family.
     #[must_use]
-    pub fn rydberg_update(&self) -> Option<RydbergUpdate> {
+    pub fn legacy_kind(&self) -> LegacyModelKind {
         match self {
-            Self::Rydberg { update, .. } => Some(*update),
-            Self::Tfim { .. } => None,
+            Self::Tfim { .. } => LegacyModelKind::Tfim,
+            Self::Rydberg { .. } => LegacyModelKind::Rydberg,
         }
     }
 }
@@ -205,23 +203,27 @@ pub enum GeometryConfig {
 }
 
 impl GeometryConfig {
-    /// Constructs the validated core geometry.
+    /// Constructs the validated qslib geometry.
     ///
     /// # Errors
     ///
     /// Returns a configuration error for invalid dimensions or coordinates.
-    pub fn build(&self) -> Result<Geometry, ConfigError> {
+    pub fn build(&self) -> Result<ResolvedGeometry, ConfigError> {
         let result = match self {
-            Self::Chain { length, boundary } => Geometry::chain(*length, (*boundary).into()),
+            Self::Chain { length, boundary } => {
+                ResolvedGeometry::chain(*length, (*boundary).into())
+            }
             Self::Rectangular {
                 lx,
                 ly,
                 boundary_x,
                 boundary_y,
-            } => Geometry::rectangular(*lx, *ly, (*boundary_x).into(), (*boundary_y).into()),
-            Self::Custom { coordinates } => Geometry::custom(coordinates.clone()),
+            } => {
+                ResolvedGeometry::rectangular(*lx, *ly, (*boundary_x).into(), (*boundary_y).into())
+            }
+            Self::Custom { coordinates } => ResolvedGeometry::custom(coordinates),
         };
-        result.map_err(|error| ConfigError::validation(error.to_string()))
+        result.map_err(ConfigError::validation)
     }
 }
 
@@ -235,7 +237,7 @@ pub enum BoundaryConfig {
     Periodic,
 }
 
-impl From<BoundaryConfig> for BoundaryCondition {
+impl From<BoundaryConfig> for Boundary {
     fn from(value: BoundaryConfig) -> Self {
         match value {
             BoundaryConfig::Open => Self::Open,
@@ -350,36 +352,45 @@ impl ExecutionSettings {
     }
 }
 
-/// Shared initial basis-state prescription.
+/// Shared initial basis-state prescription in legacy spin labels.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum InitialState {
-    /// Every site starts in [`Spin::Down`].
+    /// Every site starts in the legacy down label.
     #[default]
     Down,
-    /// Every site starts in [`Spin::Up`].
+    /// Every site starts in the legacy up label.
     Up,
     /// Even sites start up and odd sites start down.
     Alternating,
 }
 
 impl InitialState {
-    /// Materializes one spin per site.
+    /// Materializes one legacy spin label per site.
+    ///
+    /// The label-to-bit conversion is model dependent and applied through the
+    /// explicit qslib legacy adapter at run time.
     ///
     /// # Errors
     ///
     /// Returns an error for an empty model.
-    pub fn build(self, num_sites: usize) -> Result<Vec<Spin>, ConfigError> {
+    pub fn build(self, num_sites: usize) -> Result<Vec<LegacySpin>, ConfigError> {
         if num_sites == 0 {
             return Err(ConfigError::validation(
                 "initial state requires at least one site",
             ));
         }
         Ok(match self {
-            Self::Down => vec![Spin::Down; num_sites],
-            Self::Up => vec![Spin::Up; num_sites],
+            Self::Down => vec![LegacySpin::Down; num_sites],
+            Self::Up => vec![LegacySpin::Up; num_sites],
             Self::Alternating => (0..num_sites)
-                .map(|site| if site % 2 == 0 { Spin::Up } else { Spin::Down })
+                .map(|site| {
+                    if site % 2 == 0 {
+                        LegacySpin::Up
+                    } else {
+                        LegacySpin::Down
+                    }
+                })
                 .collect(),
         })
     }

@@ -56,22 +56,22 @@ jobs:
         run: cargo package --locked
 
   minimum-rust:
-    name: Minimum supported Rust 1.80
+    name: Minimum supported Rust 1.85
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Install Rust 1.80
+      - name: Install Rust 1.85
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          toolchain: "1.80"
+          toolchain: "1.85"
 
       - name: Cache Cargo artifacts
         uses: swatinem/rust-cache@v2
         with:
-          key: msrv-1.80
+          key: msrv-1.85
 
       - name: Check minimum supported Rust
         run: cargo check --all-targets --locked

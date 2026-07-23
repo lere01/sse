@@ -22,6 +22,11 @@ All notable changes to this project are documented here. The project follows
   docs deploy.
 - The documentation site gains a "Run it in your browser" chapter and now
   deploys the demo under `/demo/`.
+- The guide, API docs, and demo now wear the shared house design system
+  (github.com/lere01/design, pinned at v0.1.0): Inter/Instrument Serif
+  typography, the indigo-on-paper/navy palette, and a cross-site
+  navigation strip. CI fetches the pinned tag; `serve_demo.sh` stages it
+  locally.
 
 ## 0.2.0 - 2026-07-22
 

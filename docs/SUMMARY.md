@@ -1,6 +1,6 @@
 # Summary
 
-- [SSE](introduction.md)
+- [Introduction](introduction.md)
 - [Getting started](getting-started.md)
 - [Physical conventions](physical-conventions.md)
 - [The SSE method](sse-method.md)

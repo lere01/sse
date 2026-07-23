@@ -2,7 +2,7 @@
 authors = ["SSE contributors"]
 language = "en"
 src = "docs"
-title = "SSE User Guide"
+title = "sse — stochastic series expansion"
 
 [build]
 build-dir = "target/book"
@@ -14,3 +14,13 @@ git-repository-url = "https://github.com/lere01/sse"
 edit-url-template = "https://github.com/lere01/sse/edit/main/docs/{path}"
 default-theme = "light"
 preferred-dark-theme = "navy"
+# House design system (github.com/lere01/design), fetched at a pinned tag
+# into design/ by CI; for local builds run the same fetch first:
+#   curl -sSfL https://raw.githubusercontent.com/lere01/design/v0.1.0/ci/fetch-design.sh | sh -s -- v0.1.0 design
+additional-css = [
+    "design/tokens/tokens.css",
+    "design/fonts/fonts.css",
+    "design/partials/nav.css",
+    "design/adapters/mdbook/qs-theme.css",
+]
+additional-js = ["design/partials/nav.js"]

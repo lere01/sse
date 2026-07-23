@@ -43,6 +43,11 @@ jobs:
         with:
           tool: mdbook@0.5.4
 
+      - name: Fetch design system
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/lere01/design/v0.1.0/ci/fetch-design.sh \
+            | sh -s -- v0.1.0 design
+
       - name: Configure GitHub Pages
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         id: pages
@@ -52,11 +57,18 @@ jobs:
         run: mdbook test
 
       - name: Build physics guide
-        run: mdbook build
+        run: |
+          mdbook build
+          # mdBook copies the listed CSS but not the font binaries
+          cp design/fonts/*.woff2 target/book/design/fonts/
 
       - name: Build Rust API documentation
         env:
-          RUSTDOCFLAGS: -D warnings
+          RUSTDOCFLAGS: >-
+            -D warnings
+            --html-in-header ${{ github.workspace }}/design/adapters/rustdoc/header.html
+            --html-before-content ${{ github.workspace }}/design/adapters/rustdoc/before-content.html
+            --html-after-content ${{ github.workspace }}/design/adapters/rustdoc/after-content.html
         run: cargo doc --no-deps --locked
 
       - name: Install wasm target
@@ -86,6 +98,7 @@ jobs:
           cp -R target/book/. target/site/
           cp -R target/doc/. target/site/api/
           cp -R sse-web/web/. target/site/demo/
+          cp -R design target/site/demo/design
 
       - name: Upload pull-request preview artifact
         if: github.event_name == 'pull_request'

@@ -18,6 +18,9 @@
   --trace-3: #f59e0b; --trace-4: #ec4899; --trace-5: #8b5cf6;
   --trace-6: #14b8a6; --trace-7: #f43f5e;
   --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  /* Inter loads from design/fonts/fonts.css (house design system);
+     falls back to the system stack when the design assets are absent. */
+  --sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   color-scheme: light;
 }
 
@@ -55,7 +58,7 @@ html, body { margin: 0; }
 body {
   background: var(--bg);
   color: var(--text);
-  font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+  font: 15px/1.55 var(--sans);
   min-height: 100vh;
   display: flex;
   flex-direction: column;

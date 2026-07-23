@@ -5,6 +5,19 @@ All notable changes to this project are documented here. The project follows
 
 ## Unreleased
 
+### Added
+
+- `sse-web`: an unpublished workspace crate compiling the engine to
+  WebAssembly, and a static browser demo (Web Worker chain pool, live
+  convergence plots, β-ladder ground-state estimates, split R-hat and ESS
+  badges, and one-click `sse-run-v1` YAML export). Browser chains are
+  bit-identical to CLI chains; parity is enforced by fixture tests at the
+  native, wasm, and statistics layers.
+- Native preset references for the demo's default configurations, generated
+  by the CLI, plus a `serve_demo.sh` script for local hosting.
+- The documentation site gains a "Run it in your browser" chapter and now
+  deploys the demo under `/demo/`.
+
 ## 0.2.0 - 2026-07-22
 
 ### Changed

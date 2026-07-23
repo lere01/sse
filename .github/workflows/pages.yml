@@ -59,11 +59,31 @@ jobs:
           RUSTDOCFLAGS: -D warnings
         run: cargo doc --no-deps --locked
 
+      - name: Install wasm target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Install wasm-bindgen
+        run: cargo install wasm-bindgen-cli --version 0.2.126 --locked
+
+      - name: Build browser demo module
+        run: |
+          cargo build -p sse-web --target wasm32-unknown-unknown --release --locked
+          wasm-bindgen --target web --no-typescript \
+            --out-dir sse-web/web/pkg \
+            target/wasm32-unknown-unknown/release/sse_web.wasm
+
+      - name: Verify wasm chain parity against the CLI fixture
+        run: node sse-web/tests/wasm_parity.mjs
+
+      - name: Verify browser statistics against the CLI summary
+        run: node sse-web/tests/stats_parity.mjs
+
       - name: Assemble documentation site
         run: |
-          mkdir -p target/site/api
+          mkdir -p target/site/api target/site/demo
           cp -R target/book/. target/site/
           cp -R target/doc/. target/site/api/
+          cp -R sse-web/web/. target/site/demo/
 
       - name: Upload pull-request preview artifact
         if: github.event_name == 'pull_request'

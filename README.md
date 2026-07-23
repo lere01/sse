@@ -12,6 +12,14 @@ The crates.io package is named `quantum-sse` because the unrelated `sse`
 package name was already allocated. The installed command and Rust library
 import remain `sse`.
 
+## Try it in your browser
+
+The [interactive demo](https://lere01.github.io/sse/demo/) runs this exact
+engine as WebAssembly on your own device — TFIM and Rydberg lattices up to
+36 sites, with live convergence plots and error bars. Browser runs are
+bit-for-bit reproducible with the CLI: every result exports the
+`sse-run-v1` YAML that replays it natively.
+
 The current source version is **0.2.0**. It provides a configuration-driven
 command-line interface for transverse-field Ising and Rydberg simulations.
 Runs preserve raw measurements, provenance, statistical diagnostics, and

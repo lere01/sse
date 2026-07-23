@@ -1,0 +1,29 @@
+{
+ "generated_by": "sse-web/scripts/generate_presets.mjs (native sse CLI)",
+ "references": {
+  "tfim-4x4-periodicperiodic-j1-h3.044-b8-m10000-s24301-ch8": {
+   "energy_per_site": -3.2542871093750034,
+   "standard_error": 0.0015075760102059993,
+   "split_r_hat": 1.0000914284981375,
+   "version": "0.2.0"
+  },
+  "tfim-5x5-periodicperiodic-j1-h3.044-b10-m10000-s24301-ch8": {
+   "energy_per_site": -3.2444111000000033,
+   "standard_error": 0.0008232192374191647,
+   "split_r_hat": 1.0000300024506583,
+   "version": "0.2.0"
+  },
+  "tfim-6x6-periodicperiodic-j1-h3.044-b12-m10000-s24301-ch8": {
+   "energy_per_site": -3.2388036168981444,
+   "standard_error": 0.0006450908292957471,
+   "split_r_hat": 1.0001102382345846,
+   "version": "0.2.0"
+  },
+  "tfim-chain16-periodic-j1-h3.044-b32-m10000-s24301-ch8": {
+   "energy_per_site": -3.1266626953125014,
+   "standard_error": 0.0004056290914038168,
+   "split_r_hat": 1.000115709301644,
+   "version": "0.2.0"
+  }
+ }
+}

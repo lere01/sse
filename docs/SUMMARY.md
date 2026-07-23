@@ -11,6 +11,7 @@
   - [Convergence](simulation/convergence.md)
   - [Uncertainty and autocorrelation](simulation/uncertainty.md)
   - [Reproducibility](simulation/reproducibility.md)
+- [Run it in your browser](browser.md)
 - [Command-line interface](current-interface.md)
 - [Configuration reference](configuration.md)
 - [Run artifacts and restart](artifacts.md)

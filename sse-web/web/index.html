@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sse — stochastic series expansion in your browser</title>
+<meta name="description"
+      content="Run real quantum Monte Carlo in your browser: finite-temperature ground-state estimates for transverse-field Ising and Rydberg lattices, bit-identical to the sse CLI.">
+<link rel="stylesheet" href="style.css">
+<script type="module" src="app.js"></script>
+</head>
+<body>
+<header class="masthead">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">⟨H⟩</span>
+    <span class="brand-name">sse</span>
+    <span class="brand-tag">stochastic series expansion, in your browser</span>
+  </div>
+  <nav class="masthead-links">
+    <a href="../">docs</a>
+    <a href="https://github.com/lere01/sse">github</a>
+    <button id="theme-toggle" class="ghost" aria-label="Toggle color theme">◐</button>
+  </nav>
+</header>
+
+<main class="layout">
+  <aside class="panel" aria-label="Simulation parameters">
+    <section class="field-group">
+      <h2>Model</h2>
+      <div class="segmented" role="radiogroup" aria-label="Model family">
+        <button id="model-tfim" class="segment selected" role="radio" aria-checked="true">TFIM</button>
+        <button id="model-rydberg" class="segment" role="radio" aria-checked="false">Rydberg</button>
+      </div>
+    </section>
+
+    <section class="field-group">
+      <h2>Lattice</h2>
+      <div class="chips" id="size-chips">
+        <button class="chip" data-size="4,4">4×4</button>
+        <button class="chip" data-size="5,5">5×5</button>
+        <button class="chip selected" data-size="6,6">6×6</button>
+        <button class="chip" data-size="16,1">chain 16</button>
+        <button class="chip chip-local" data-size="8,8">8×8</button>
+      </div>
+      <div class="field-row">
+        <label>L<sub>x</sub> <input id="lx" type="number" min="1" max="16" value="6"></label>
+        <label>L<sub>y</sub> <input id="ly" type="number" min="1" max="16" value="6"></label>
+      </div>
+      <div class="field-row">
+        <label class="toggle"><input id="periodic-x" type="checkbox" checked> periodic x</label>
+        <label class="toggle" id="periodic-y-wrap"><input id="periodic-y" type="checkbox" checked> periodic y</label>
+      </div>
+    </section>
+
+    <section class="field-group" id="params-tfim">
+      <h2>Parameters</h2>
+      <div class="field-row">
+        <label>J <input id="tfim-j" type="number" step="0.1" value="1.0"></label>
+        <label>h <input id="tfim-h" type="number" step="0.001" value="3.044"></label>
+      </div>
+    </section>
+
+    <section class="field-group hidden" id="params-rydberg">
+      <h2>Parameters</h2>
+      <div class="field-row">
+        <label>Ω <input id="ryd-omega" type="number" step="0.1" value="1.0"></label>
+        <label>δ <input id="ryd-detuning" type="number" step="0.1" value="1.0"></label>
+        <label>C₆ <input id="ryd-c6" type="number" step="0.1" value="1.0"></label>
+      </div>
+    </section>
+
+    <section class="field-group">
+      <h2>Sampling</h2>
+      <div class="field-row">
+        <label class="toggle"><input id="beta-auto" type="checkbox" checked> β ladder → 2L</label>
+        <label id="beta-manual-wrap" class="dimmed">β <input id="beta" type="number" step="0.5" value="12" disabled></label>
+      </div>
+      <div class="field-row">
+        <label>chains <input id="chains" type="number" min="2" max="16" value="8"></label>
+        <label>sweeps <input id="sweeps" type="number" min="100" step="1000" value="10000"></label>
+      </div>
+      <div class="field-row">
+        <label>seed <input id="seed" type="number" min="0" value="24301"></label>
+        <button id="reseed" class="ghost" title="Randomize seed">⚄</button>
+      </div>
+    </section>
+
+    <button id="run" class="run-button">Run in browser</button>
+    <p id="run-hint" class="hint" aria-live="polite"></p>
+
+    <section class="field-group reproduce">
+      <h2>Reproduce locally</h2>
+      <pre id="yaml" class="code-card" tabindex="0" aria-label="sse-run-v1 configuration"></pre>
+      <div class="field-row">
+        <button id="copy-yaml" class="ghost">copy yaml</button>
+        <button id="copy-command" class="ghost">copy command</button>
+        <a class="ghost link-button" href="https://github.com/lere01/sse/releases" target="_blank" rel="noopener">releases ↗</a>
+      </div>
+    </section>
+  </aside>
+
+  <section class="stage">
+    <div class="card">
+      <div class="card-head">
+        <h2 id="lattice-caption">6×6 square, periodic</h2>
+        <span id="site-count" class="badge badge-quiet">36 sites</span>
+      </div>
+      <svg id="lattice" class="lattice" role="img" aria-label="Lattice preview"></svg>
+    </div>
+
+    <div class="card" id="results-card">
+      <div class="card-head">
+        <h2>Result</h2>
+        <div class="badges" id="badges"></div>
+      </div>
+
+      <div id="results-idle" class="results-state">
+        <p>Configure a lattice and press <strong>Run in browser</strong>. The
+        Monte Carlo runs on your device — nothing is uploaded, and the same
+        configuration reproduces these exact numbers with the
+        <a href="https://github.com/lere01/sse/releases">installed CLI</a>.</p>
+      </div>
+
+      <div id="results-live" class="results-state hidden">
+        <div class="headline">
+          <span id="headline-value" class="headline-number">—</span>
+          <span id="headline-label" class="headline-label"></span>
+        </div>
+        <div class="progress-rail" id="progress-rail" aria-hidden="true"></div>
+        <p id="status-line" class="hint" role="status" aria-live="polite"></p>
+        <svg id="convergence" class="plot" role="img" aria-label="Energy convergence"></svg>
+        <div class="inset-row">
+          <svg id="ladder" class="plot inset hidden" role="img" aria-label="Energy against beta"></svg>
+          <table id="chain-table" class="chain-table hidden">
+            <thead><tr><th>chain</th><th>E/site</th><th>ESS</th><th>τ</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="field-row">
+          <button id="cancel" class="ghost hidden">cancel</button>
+          <button id="share" class="ghost hidden">copy share link</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="history-card">
+      <div class="card-head"><h2>Session history</h2></div>
+      <div id="history" class="history-rail"><p class="hint">No runs yet.</p></div>
+    </div>
+  </section>
+</main>
+
+<footer class="footing">
+  <span id="version-line">sse-web · qslib-quantum 0.2.0 · seed scheme qslib-seed-v1</span>
+</footer>
+</body>
+</html>

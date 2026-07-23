@@ -1,3 +1,7 @@
+[workspace]
+members = [".", "sse-web"]
+resolver = "2"
+
 [package]
 name = "quantum-sse"
 version = "0.2.0"

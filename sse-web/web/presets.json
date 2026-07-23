@@ -1,10 +1,40 @@
 {
  "generated_by": "sse-web/scripts/generate_presets.mjs (native sse CLI)",
  "references": {
+  "tfim-4x4-periodicperiodic-j1-h1-b8-m10000-s24301-ch8": {
+   "energy_per_site": -2.1261891601562497,
+   "standard_error": 0.00039645464233327833,
+   "split_r_hat": 1,
+   "version": "0.2.0"
+  },
+  "tfim-4x4-periodicperiodic-j1-h2-b8-m10000-s24301-ch8": {
+   "energy_per_site": -2.5118697265625,
+   "standard_error": 0.0005508058811852376,
+   "split_r_hat": 1,
+   "version": "0.2.0"
+  },
   "tfim-4x4-periodicperiodic-j1-h3.044-b8-m10000-s24301-ch8": {
    "energy_per_site": -3.2542871093750034,
    "standard_error": 0.0015075760102059993,
    "split_r_hat": 1.0000914284981375,
+   "version": "0.2.0"
+  },
+  "tfim-4x4-periodicperiodic-j1-h5-b8-m10000-s24301-ch8": {
+   "energy_per_site": -5.1068609375,
+   "standard_error": 0.002032539147063779,
+   "split_r_hat": 1.000099472200955,
+   "version": "0.2.0"
+  },
+  "tfim-5x5-periodicperiodic-j1-h1-b10-m10000-s24301-ch8": {
+   "energy_per_site": -2.1255502,
+   "standard_error": 0.0003993830957149758,
+   "split_r_hat": 1,
+   "version": "0.2.0"
+  },
+  "tfim-5x5-periodicperiodic-j1-h2-b10-m10000-s24301-ch8": {
+   "energy_per_site": -2.51159265,
+   "standard_error": 0.0006615629413420491,
+   "split_r_hat": 1.0000213018029556,
    "version": "0.2.0"
   },
   "tfim-5x5-periodicperiodic-j1-h3.044-b10-m10000-s24301-ch8": {
@@ -13,10 +43,34 @@
    "split_r_hat": 1.0000300024506583,
    "version": "0.2.0"
   },
+  "tfim-5x5-periodicperiodic-j1-h5-b10-m10000-s24301-ch8": {
+   "energy_per_site": -5.10534385,
+   "standard_error": 0.0012899930851141396,
+   "split_r_hat": 1.0000960165635229,
+   "version": "0.2.0"
+  },
+  "tfim-6x6-periodicperiodic-j1-h1-b12-m10000-s24301-ch8": {
+   "energy_per_site": -2.126043865740741,
+   "standard_error": 0.00031867159308547285,
+   "split_r_hat": 1,
+   "version": "0.2.0"
+  },
+  "tfim-6x6-periodicperiodic-j1-h2-b12-m10000-s24301-ch8": {
+   "energy_per_site": -2.5113977719907403,
+   "standard_error": 0.0005084913096122025,
+   "split_r_hat": 1.0001048632772016,
+   "version": "0.2.0"
+  },
   "tfim-6x6-periodicperiodic-j1-h3.044-b12-m10000-s24301-ch8": {
    "energy_per_site": -3.2388036168981444,
    "standard_error": 0.0006450908292957471,
    "split_r_hat": 1.0001102382345846,
+   "version": "0.2.0"
+  },
+  "tfim-6x6-periodicperiodic-j1-h5-b12-m10000-s24301-ch8": {
+   "energy_per_site": -5.103648813657408,
+   "standard_error": 0.0009197584635417835,
+   "split_r_hat": 1.0001022962604507,
    "version": "0.2.0"
   },
   "tfim-chain16-periodic-j1-h3.044-b32-m10000-s24301-ch8": {

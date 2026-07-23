@@ -63,7 +63,9 @@ jobs:
         run: rustup target add wasm32-unknown-unknown
 
       - name: Install wasm-bindgen
-        run: cargo install wasm-bindgen-cli --version 0.2.126 --locked
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen@0.2.126
 
       - name: Build browser demo module
         run: |

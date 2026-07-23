@@ -24,14 +24,17 @@ const defaults = {
   seed: 24301,
 };
 
+// Grid: every online square size at common transverse fields (including
+// the 2D critical point), plus the chain preset. Each point is one native
+// CLI run at the page's default sampling parameters.
+const fields = [1, 2, 3.044, 5];
 const points = [
-  { lx: 4, ly: 4 },
-  { lx: 5, ly: 5 },
-  { lx: 6, ly: 6 },
-  { lx: 16, ly: 1 },
+  ...[4, 5, 6].flatMap((size) => fields.map((h) => ({ lx: size, ly: size, h }))),
+  { lx: 16, ly: 1, h: 3.044 },
 ];
 
 function configFor(point) {
+  const h = point.h ?? defaults.h;
   const beta = 2 * Math.max(point.lx, point.ly);
   const geometry =
     point.ly === 1
@@ -46,7 +49,7 @@ function configFor(point) {
   return {
     schema_version: "sse-run-v1",
     name: `browser tfim ${point.lx}x${point.ly}`,
-    model: { kind: "tfim", geometry, j: defaults.j, h: defaults.h },
+    model: { kind: "tfim", geometry, j: defaults.j, h },
     simulation: {
       beta,
       operator_string_length: 64,
@@ -113,7 +116,7 @@ for (const point of points) {
   const configPath = join(workDir, "run.yaml");
   const outputPath = join(workDir, "out");
   writeFileSync(configPath, toYaml(config));
-  console.log(`running ${point.lx}x${point.ly} (beta ${config.simulation.beta}) ...`);
+  console.log(`running ${point.lx}x${point.ly} h=${config.model.h} (beta ${config.simulation.beta}) ...`);
   execFileSync(binary, [
     "run",
     "--config",
